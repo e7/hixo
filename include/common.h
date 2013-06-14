@@ -6,6 +6,10 @@ extern "C" {
 #endif // __cplusplus
 
 
+#define FALSE           0
+#define TRUE            (!FALSE)
+
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
