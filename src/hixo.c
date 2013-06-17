@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
@@ -21,17 +22,15 @@
 #define MAX_CONNECTIONS         64
 // }} config
 
+#define HIXO_OK             (0)
+#define HIXO_ERROR          (-1)
 #define unblocking_fd(fd)   fcntl(fd, \
                                   F_SETFL, \
                                   fcntl(fd, F_GETFL) | O_NONBLOCK)
-typedef enum {
-    HIXO_E_IN,
-    HIXO_E_OUT,
-} hixo_event_type_t;
 
 typedef struct {
-    hixo_event_type_t m_ev_type;
     void (*mpf_handler)(void *);
+
 } hixo_event_t;
 
 typedef enum {
@@ -42,24 +41,121 @@ typedef enum {
 typedef struct {
     int m_fd;
     int (*mpf_init)(void);
-    int (*mpf_add_event)(void);
+    int (*mpf_add_event)(hixo_event_t *);
     int (*mpf_mod_event)(void);
     int (*mpf_del_event)(void);
+    int (*mpf_process_events)(void);
     void (*mpf_uninit)(void);
-} hixo_event_ctx_t;
+    void *mp_misc;
+} hixo_event_module_ctx_t;
 
 typedef struct {
     hixo_module_type_t m_type;
+    void *mp_ctx;
 } hixo_module_t;
 
 // epoll模块
-hixo_event_ctx_t g_epoll_module_ctx = {
-    0,
-};
-hixo_module_t g_epoll_module = {
-    HIXO_EVENT,
+static int epoll_init(void);
+static int epoll_add_event(hixo_event_t *p_ev);
+static int epoll_mod_event(void);
+static int epoll_del_event(void);
+static int epoll_process_events(void);
+static void epoll_uninit(void);
+
+static hixo_event_module_ctx_t s_epoll_module_ctx = {
+    -1,
+    &epoll_init,
+    &epoll_add_event,
+    &epoll_mod_event,
+    &epoll_del_event,
+    &epoll_process_events,
+    &epoll_uninit,
+    NULL,
 };
 
+int epoll_init(void)
+{
+    int tmp_err = 0;
+
+    #define epev_size sizeof(struct epoll_event)
+    s_epoll_module_ctx.mp_misc = calloc(MAX_CONNECTIONS, epev_size);
+    #undef epev_size
+    if (NULL == s_epoll_module_ctx.mp_misc) {
+        fprintf(stderr, "[ERROR] out of memory\n");
+
+        return HIXO_ERROR;
+    }
+
+    errno = 0;
+    s_epoll_module_ctx.m_fd = epoll_create(MAX_CONNECTIONS);
+    tmp_err = (-1 == s_epoll_module_ctx.m_fd) ? errno : 0;
+    if (tmp_err) {
+        fprintf(stderr, "[ERROR] epoll_create failed: %d\n", tmp_err);
+        return HIXO_ERROR;
+    } else {
+        return HIXO_OK;
+    }
+}
+
+int epoll_add_event(hixo_event_t *p_ev)
+{
+    return HIXO_OK;
+}
+
+int epoll_mod_event(void)
+{
+    return HIXO_OK;
+}
+
+int epoll_del_event(void)
+{
+    return HIXO_OK;
+}
+
+int epoll_process_events(void)
+{
+    int ready = 0;
+    int tmp_err = 0;
+    struct epoll_event *p_evs = NULL;
+
+    p_evs = (struct epoll_event *)s_epoll_module_ctx.mp_misc;
+
+    errno = 0;
+    ready = epoll_wait(s_epoll_module_ctx.m_fd, p_evs, MAX_CONNECTIONS, -1);
+    tmp_err = (-1 == ready) ? errno : 0;
+    if (tmp_err) {
+        if (EINTR == tmp_err) {
+            return HIXO_OK; 
+        } else {
+            fprintf(stderr, "[ERROR] epoll_wait failed: %d\n", tmp_err);
+
+            return HIXO_ERROR;
+        }
+    }
+
+
+    return HIXO_OK;
+}
+
+void epoll_uninit(void)
+{
+    (void)close(s_epoll_module_ctx.m_fd);
+
+    if (NULL != s_epoll_module_ctx.mp_misc) {
+        free(s_epoll_module_ctx.mp_misc);
+        s_epoll_module_ctx.mp_misc = NULL;
+    }
+
+    return;
+}
+
+hixo_module_t g_epoll_module = {
+    HIXO_EVENT,
+    &s_epoll_module_ctx,
+};
+
+
+// 模块数组
 hixo_module_t *g_modules[] = {
     &g_epoll_module,
 };
@@ -69,24 +165,31 @@ int g_master = TRUE;
 
 static int master_main(void)
 {
-    return 0;
+    return HIXO_OK;
 }
 
 static int worker_main(int sock)
 {
-    int epfd = 0;
-    int tmp_err = 0;
+    int rslt = 0;
+    
+    for (int i = 0; i < sizeof(g_modules); ++i) {
+        hixo_event_module_ctx_t const *pc_ev_ctx = NULL;
 
-    errno = 0;
-    epfd = epoll_create(MAX_CONNECTIONS);
-    tmp_err = errno;
-    if (-1 == epfd) {
-        goto ERR_EPOLL_CREATE;
+        if (HIXO_EVENT != g_modules[i]->m_type) {
+            continue;
+        }
+
+        pc_ev_ctx = (hixo_event_module_ctx_t *)g_modules[i]->mp_ctx;
+        rslt = (*pc_ev_ctx->mpf_init)();
+        if (-1 == rslt) {
+            break;
+        }
     }
 
-ERR_EPOLL_CREATE:
+    while (TRUE) {
+    }
 
-    return 0;
+    return rslt;
 }
 
 static int hixo_main(int sock)
@@ -119,13 +222,13 @@ int main(int argc, char *argv[])
     int rslt = EXIT_FAILURE;
     int lsn_fd = 0;
     int tmp_err = 0;
-    struct sockaddr_in srv_addr = {};
+    struct sockaddr_in srv_addr;
 
     // 创建套接字
     errno = 0;
     lsn_fd = socket(PF_INET, SOCK_STREAM, 0);
-    tmp_err = errno;
-    if (-1 == lsn_fd) {
+    tmp_err = (-1 == lsn_fd) ? errno : 0;
+    if (tmp_err) {
         fprintf(stderr, "[ERROR] socket() failed: %d\n", tmp_err);
 
         goto ERR_SOCKET;
