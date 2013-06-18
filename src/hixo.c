@@ -26,6 +26,7 @@ typedef struct {
 #define WORKER_PROCESSES        4
 #define MAX_CONNECTIONS         64
 static addr_t s_srv_addrs[] = {
+    {INADDR_ANY, 80},
     {INADDR_ANY, 8888},
     {INADDR_ANY, 8889},
     {INADDR_ANY, 8890},
@@ -40,8 +41,10 @@ static addr_t s_srv_addrs[] = {
 
 typedef struct {
     int m_fd;
+    int m_shut_read;
+    int m_shut_write;
     void (*mpf_handler)(void *);
-} hixo_event_t;
+} hixo_connection_t;
 
 typedef enum {
     HIXO_CORE,
@@ -51,7 +54,7 @@ typedef enum {
 typedef struct {
     int m_fd;
     int (*mpf_init)(void);
-    int (*mpf_add_event)(hixo_event_t *);
+    int (*mpf_add_event)(hixo_connection_t *);
     int (*mpf_mod_event)(void);
     int (*mpf_del_event)(void);
     int (*mpf_process_events)(void);
@@ -66,7 +69,7 @@ typedef struct {
 
 // epoll模块
 static int epoll_init(void);
-static int epoll_add_event(hixo_event_t *p_ev);
+static int epoll_add_event(hixo_connection_t *p_ev);
 static int epoll_mod_event(void);
 static int epoll_del_event(void);
 static int epoll_process_events(void);
@@ -107,7 +110,7 @@ int epoll_init(void)
     }
 }
 
-int epoll_add_event(hixo_event_t *p_ev)
+int epoll_add_event(hixo_connection_t *p_ev)
 {
     return HIXO_OK;
 }
@@ -124,15 +127,19 @@ int epoll_del_event(void)
 
 int epoll_process_events(void)
 {
-    int ready = 0;
+    int nevents = 0;
     int tmp_err = 0;
+    int timer = -1;
     struct epoll_event *p_evs = NULL;
 
     p_evs = (struct epoll_event *)s_epoll_module_ctx.mp_misc;
 
     errno = 0;
-    ready = epoll_wait(s_epoll_module_ctx.m_fd, p_evs, MAX_CONNECTIONS, -1);
-    tmp_err = (-1 == ready) ? errno : 0;
+    nevents = epoll_wait(s_epoll_module_ctx.m_fd,
+                         p_evs,
+                         MAX_CONNECTIONS,
+                         timer);
+    tmp_err = (-1 == nevents) ? errno : 0;
     if (tmp_err) {
         if (EINTR == tmp_err) {
             return HIXO_OK; 
@@ -142,8 +149,24 @@ int epoll_process_events(void)
             return HIXO_ERROR;
         }
     }
+    
+    if (0 == nevents) { // timeout
+        return HIXO_OK;
+    }
 
-    for (int i = 0; i < ready; ++i) {
+    for (int i = 0; i < nevents; ++i) {
+        hixo_connection_t *p_conn = p_evs[i].data.ptr;
+
+        if (p_evs[i].events & (EPOLLERR | EPOLLHUP)) {
+            p_conn->m_shut_read = TRUE;
+            p_conn->m_shut_write = TRUE;
+        }
+
+        if ((p_evs[i].events & EPOLLIN) && (!p_conn->m_shut_read)) {
+        }
+
+        if ((p_evs[i].events & EPOLLOUT) && (!p_conn->m_shut_write)) {
+        }
     }
 
     return HIXO_OK;
@@ -310,7 +333,7 @@ int main(int argc, char *argv[])
         ret = bind(s_lsn_sockets[i].m_fd,
                    (struct sockaddr *)&srv_addr,
                    sizeof(srv_addr));
-        tmp_err = (-1 == errno) ? errno : 0;
+        tmp_err = (-1 == ret) ? errno : 0;
         if (tmp_err) {
             s_lsn_sockets[i].m_valid = FALSE;
             fprintf(stderr, "[ERROR] bind() failed: %d\n", tmp_err);
