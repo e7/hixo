@@ -9,6 +9,8 @@ extern "C" {
 #define FALSE           0
 #define TRUE            (!FALSE)
 
+#define ARRAY_COUNT(a)  (sizeof(a) / sizeof(a[0]))
+
 
 #ifdef __cplusplus
 }

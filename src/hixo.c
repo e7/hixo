@@ -15,11 +15,21 @@
 #include "common.h"
 
 
+typedef struct {
+    uint32_t m_ip;
+    uint16_t m_port;
+} addr_t;
+
+
 // config {{
 #define DAEMON                  FALSE
-#define SRV_PORT                8888
 #define WORKER_PROCESSES        4
 #define MAX_CONNECTIONS         64
+static addr_t s_srv_addrs[] = {
+    {INADDR_ANY, 8888},
+    {INADDR_ANY, 8889},
+    {INADDR_ANY, 8890},
+};
 // }} config
 
 #define HIXO_OK             (0)
@@ -29,8 +39,8 @@
                                   fcntl(fd, F_GETFL) | O_NONBLOCK)
 
 typedef struct {
+    int m_fd;
     void (*mpf_handler)(void *);
-
 } hixo_event_t;
 
 typedef enum {
@@ -133,6 +143,8 @@ int epoll_process_events(void)
         }
     }
 
+    for (int i = 0; i < ready; ++i) {
+    }
 
     return HIXO_OK;
 }
@@ -162,19 +174,24 @@ hixo_module_t *g_modules[] = {
 
 
 int g_master = TRUE;
+static struct {
+    int m_fd;
+    int m_valid;
+} s_lsn_sockets[ARRAY_COUNT(s_srv_addrs)];
 
 static int master_main(void)
 {
+    sleep(-1);
+
     return HIXO_OK;
 }
 
-static int worker_main(int sock)
+static int worker_main(void)
 {
     int rslt = 0;
+    hixo_event_module_ctx_t const *pc_ev_ctx = NULL;
     
-    for (int i = 0; i < sizeof(g_modules); ++i) {
-        hixo_event_module_ctx_t const *pc_ev_ctx = NULL;
-
+    for (int i = 0; i < ARRAY_COUNT(g_modules); ++i) {
         if (HIXO_EVENT != g_modules[i]->m_type) {
             continue;
         }
@@ -187,12 +204,17 @@ static int worker_main(int sock)
     }
 
     while (TRUE) {
+        rslt = (*pc_ev_ctx->mpf_process_events)();
+
+        if (-1 == rslt) {
+            break;
+        }
     }
 
     return rslt;
 }
 
-static int hixo_main(int sock)
+static int hixo_main(void)
 {
     if (DAEMON) {
     }
@@ -213,62 +235,119 @@ static int hixo_main(int sock)
     if (g_master) {
         return master_main();
     } else {
-        return worker_main(sock);
+        return worker_main();
     }
 }
 
 int main(int argc, char *argv[])
 {
     int rslt = EXIT_FAILURE;
-    int lsn_fd = 0;
     int tmp_err = 0;
     struct sockaddr_in srv_addr;
+    int fatal_err = 0;
+
+    for (int i = 0; i < ARRAY_COUNT(s_srv_addrs); ++i) {
+        s_lsn_sockets[i].m_fd = -1;
+        s_lsn_sockets[i].m_valid = TRUE;
+    }
 
     // 创建套接字
-    errno = 0;
-    lsn_fd = socket(PF_INET, SOCK_STREAM, 0);
-    tmp_err = (-1 == lsn_fd) ? errno : 0;
-    if (tmp_err) {
-        fprintf(stderr, "[ERROR] socket() failed: %d\n", tmp_err);
+    fatal_err = TRUE;
+    for (int i = 0; i < ARRAY_COUNT(s_srv_addrs); ++i) {
+        errno = 0;
+        s_lsn_sockets[i].m_fd = socket(PF_INET, SOCK_STREAM, 0);
+        tmp_err = (-1 == s_lsn_sockets[i].m_fd) ? errno : 0;
+        if (tmp_err) {
+            s_lsn_sockets[i].m_valid = FALSE;
+            fprintf(stderr, "[ERROR] socket() failed: %d\n", tmp_err);
+        } else {
+            fatal_err = FALSE;
+        }
+    }
 
+    if (fatal_err) {
         goto ERR_SOCKET;
     }
 
     // 非阻塞
-    errno = 0;
-    if (-1 == unblocking_fd(lsn_fd)) {
-        tmp_err = errno;
-        fprintf(stderr, "[ERROR] fcntl() failed: %d\n", tmp_err);
+    fatal_err = TRUE;
+    for (int i = 0; i < ARRAY_COUNT(s_srv_addrs); ++i) {
+        int ret = 0;
 
+        if (!s_lsn_sockets[i].m_valid) {
+            continue;
+        }
+
+        errno = 0;
+        ret = unblocking_fd(s_lsn_sockets[i].m_fd);
+        tmp_err = (-1 == ret) ? errno : 0;
+        if (tmp_err) {
+            s_lsn_sockets[i].m_valid = FALSE;
+            fprintf(stderr, "[ERROR] fcntl() failed: %d\n", tmp_err);
+        } else {
+            fatal_err = FALSE;
+        }
+    }
+
+    if (fatal_err) {
         goto ERR_FCNTL;
     }
 
     // 绑定
+    fatal_err = TRUE;
     (void)memset(&srv_addr, 0, sizeof(srv_addr));
-    srv_addr.sin_family = AF_INET;
-    srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    srv_addr.sin_port = htons(SRV_PORT);
-    errno = 0;
-    if (-1 == bind(lsn_fd,
-                   (struct sockaddr *)&srv_addr,
-                   sizeof(srv_addr)))
-    {
-        tmp_err = errno;
-        fprintf(stderr, "[ERROR] bind() failed: %d\n", tmp_err);
+    for (int i = 0; i < ARRAY_COUNT(s_srv_addrs); ++i) {
+        int ret = 0;
 
+        if (!s_lsn_sockets[i].m_valid) {
+            continue;
+        }
+
+        srv_addr.sin_family = AF_INET;
+        srv_addr.sin_addr.s_addr = htonl(s_srv_addrs[i].m_ip);
+        srv_addr.sin_port = htons(s_srv_addrs[i].m_port);
+        errno = 0;
+        ret = bind(s_lsn_sockets[i].m_fd,
+                   (struct sockaddr *)&srv_addr,
+                   sizeof(srv_addr));
+        tmp_err = (-1 == errno) ? errno : 0;
+        if (tmp_err) {
+            s_lsn_sockets[i].m_valid = FALSE;
+            fprintf(stderr, "[ERROR] bind() failed: %d\n", tmp_err);
+        } else {
+            fatal_err = FALSE;
+        }
+    }
+
+    if (fatal_err) {
         goto ERR_BIND;
     }
 
     // 监听
-    errno = 0;
-    if (-1 == listen(lsn_fd, SOMAXCONN)) {
-        tmp_err = errno;
-        fprintf(stderr, "[ERROR] listen failed: %d\n", tmp_err);
+    fatal_err = TRUE;
+    for (int i = 0; i < ARRAY_COUNT(s_srv_addrs); ++i) {
+        int ret = 0;
 
+        if (!s_lsn_sockets[i].m_valid) {
+            continue;
+        }
+
+        errno = 0;
+        ret = listen(s_lsn_sockets[i].m_fd, SOMAXCONN);
+        tmp_err = (-1 == ret) ? errno : 0;
+        if (tmp_err) {
+            s_lsn_sockets[i].m_valid = FALSE;
+            fprintf(stderr, "[ERROR] listen failed: %d\n", tmp_err);
+        } else {
+            fatal_err = FALSE;
+        }
+    }
+
+    if (fatal_err) {
         goto ERR_LISTEN;
     }
 
-    rslt = (0 == hixo_main(lsn_fd)) ? EXIT_SUCCESS : EXIT_FAILURE;
+    rslt = (0 == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
 
     // 错误处理
 ERR_LISTEN:
@@ -276,7 +355,11 @@ ERR_LISTEN:
 ERR_BIND:
 
 ERR_FCNTL:
-    (void)close(lsn_fd);
+    for (int i = 0; i < ARRAY_COUNT(s_srv_addrs); ++i) {
+        if (s_lsn_sockets[i].m_valid) {
+            (void)close(s_lsn_sockets[i].m_fd);
+        }
+    }
 
 ERR_SOCKET:
 
