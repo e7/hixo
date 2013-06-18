@@ -13,28 +13,50 @@
 // limitations under the License.
 
 
-#ifndef __COMMON_H__
-#define __COMMON_H__
+#ifndef __LIST_H__
+#define __LIST_H__
 
-#ifdef __cplusplus
+#include "common.h"
+
+#if __cplusplus
 extern "C" {
 #endif // __cplusplus
 
+// 单链表
+typedef intptr_t list_t;
 
-#define FALSE           0
-#define TRUE            (!FALSE)
+static inline
+void add_node(list_t **pp_list, list_t *p_node)
+{
+    list_t *p_tmp = NULL;
 
-#define ARRAY_COUNT(a)      (sizeof(a) / sizeof(a[0]))
-#define OFFSET_OF(s, m)     ((intptr_t)&(((s *)0)->m ))
-#define CONTAINER_OF(ptr, type, member)     \
-            ({\
-                const typeof(((type *)0)->member) *p_mptr = (ptr);\
-                (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
-            })
+    p_tmp = *pp_list;
+    *p_node = (list_t)p_tmp;
+    *pp_list = p_node;
 
+    return;
+}
 
-#ifdef __cplusplus
+static inline
+void rm_node(list_t **pp_list, list_t *p_node)
+{
+    list_t **pp_curr = NULL;
+
+    pp_curr = pp_list;
+    while (*pp_curr) {
+        if (p_node == *pp_curr) {
+            *pp_curr = (list_t *)*p_node;
+            *p_node = 0;
+
+            break;
+        }
+
+        pp_curr = (list_t **)*pp_curr;
+    }
+
+    return;
+}
+#if __cplusplus
 }
 #endif // __cplusplus
-
-#endif // __COMMON_H__
+#endif // __LIST_H__

@@ -1,3 +1,18 @@
+// Copyright [2013] [E7, ryuuzaki.uchiha@gmail.com]
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+
+//     http://www.apache.org/licenses/LICENSE-2.0
+
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -12,7 +27,7 @@
 #include <string.h>
 #include <errno.h>
 
-#include "common.h"
+#include "list.h"
 
 
 typedef struct {
@@ -25,6 +40,7 @@ typedef struct {
 #define DAEMON                  FALSE
 #define WORKER_PROCESSES        4
 #define MAX_CONNECTIONS         64
+#define CONNECTION_TIME_OUT     60
 static addr_t s_srv_addrs[] = {
     {INADDR_ANY, 80},
     {INADDR_ANY, 8888},
@@ -33,32 +49,42 @@ static addr_t s_srv_addrs[] = {
 };
 // }} config
 
+
 #define HIXO_OK             (0)
 #define HIXO_ERROR          (-1)
 #define unblocking_fd(fd)   fcntl(fd, \
                                   F_SETFL, \
                                   fcntl(fd, F_GETFL) | O_NONBLOCK)
 
-typedef struct {
-    int m_fd;
-    int m_shut_read;
-    int m_shut_write;
-    void (*mpf_handler)(void *);
-} hixo_connection_t;
 
 typedef enum {
     HIXO_CORE,
     HIXO_EVENT,
 } hixo_module_type_t;
 
-typedef struct {
+typedef struct s_hixo_connection_t hixo_connection_t;
+struct s_hixo_connection_t {
+    void (*mpf_read)(hixo_connection_t *);
+    void (*mpf_write)(hixo_connection_t *);
+
     int m_fd;
+    int m_shut_read;
+    list_t m_shut_read_node;
+    int m_shut_write;
+    list_t m_shut_write_node;
+};
+
+typedef struct {
     int (*mpf_init)(void);
     int (*mpf_add_event)(hixo_connection_t *);
     int (*mpf_mod_event)(void);
     int (*mpf_del_event)(void);
     int (*mpf_process_events)(void);
     void (*mpf_uninit)(void);
+
+    int m_fd;
+    list_t *mp_shut_read_list;
+    list_t *mp_shut_write_list;
     void *mp_misc;
 } hixo_event_module_ctx_t;
 
@@ -76,13 +102,15 @@ static int epoll_process_events(void);
 static void epoll_uninit(void);
 
 static hixo_event_module_ctx_t s_epoll_module_ctx = {
-    -1,
     &epoll_init,
     &epoll_add_event,
     &epoll_mod_event,
     &epoll_del_event,
     &epoll_process_events,
     &epoll_uninit,
+    -1,
+    NULL,
+    NULL,
     NULL,
 };
 
@@ -160,12 +188,18 @@ int epoll_process_events(void)
         if (p_evs[i].events & (EPOLLERR | EPOLLHUP)) {
             p_conn->m_shut_read = TRUE;
             p_conn->m_shut_write = TRUE;
+            add_node(&s_epoll_module_ctx.mp_shut_read_list,
+                     &p_conn->m_shut_read_node);
+            add_node(&s_epoll_module_ctx.mp_shut_write_list,
+                     &p_conn->m_shut_write_node);
         }
 
         if ((p_evs[i].events & EPOLLIN) && (!p_conn->m_shut_read)) {
+            (*p_conn->mpf_read)(p_conn);
         }
 
         if ((p_evs[i].events & EPOLLOUT) && (!p_conn->m_shut_write)) {
+            (*p_conn->mpf_read)(p_conn);
         }
     }
 
