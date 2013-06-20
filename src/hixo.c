@@ -101,7 +101,7 @@ int bitmap_set(bitmap_t *p_bm, uint32_t bit_offset)
 
         return HIXO_ERROR;
     }
-    
+
     p_bm->mp_data[byte_offset] |= 1 << byte_bit_offset;
 
     return HIXO_OK;
@@ -152,36 +152,30 @@ struct s_hixo_event_t {
     int (*mpf_write)(hixo_event_t *);
 };
 
-typedef struct s_hixo_connection_t hixo_connection_t;
-struct s_hixo_connection_t {
-    void (*mpf_read)(hixo_connection_t *);
-    void (*mpf_write)(hixo_connection_t *);
-
-    int m_fd;
-    int m_shut_read;
-    list_t m_shut_read_node;
-    int m_shut_write;
-    list_t m_shut_write_node;
-};
-
 
 // hixo_listen_t {{
 typedef enum {
-    CLOSED = 0,
-    OPENED = CLOSED + 1,
+    CLOSED = 0x00000001,
+    OPENED = (CLOSED << 1) + 1,
     CONFIGURED = OPENED + 1,
     BOUND = CONFIGURED + 1,
     LISTENING = BOUND + 1,
-} listening_status_t;
+    CONNECTED = (CLOSED << 2) + 1,
+    BROKEN = (CLOSED << 3) + 1,
+} socket_status_t;
 
-typedef struct s_hixo_listening_t hixo_listening_t;
-struct s_hixo_listening_t {
-    int m_fd;
-    listening_status_t m_status;
+typedef struct s_hixo_socket_t hixo_socket_t;
+struct s_hixo_socket_t {
+    socket_status_t m_status;
     hixo_event_t m_event;
 };
 
-hixo_listening_t ga_hixo_listenings[SRV_ADDRS_COUNT] = {};
+hixo_socket_t ga_hixo_listenings[SRV_ADDRS_COUNT] = {};
+
+static int hixo_handle_accept(hixo_event_t *p_ev)
+{
+    return HIXO_OK;
+}
 
 int hixo_init_listenings(void)
 {
@@ -189,6 +183,15 @@ int hixo_init_listenings(void)
     int arrived_count = 0;
     struct sockaddr_in srv_addr;
 
+    // 初始化监听套接字事件体
+    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
+        ga_hixo_listenings[i].m_event.m_ev_flags = EPOLLET | EPOLLIN;
+        ga_hixo_listenings[i].m_event.m_overdue = FALSE;
+        ga_hixo_listenings[i].m_event.mpf_read = &hixo_handle_accept;
+        ga_hixo_listenings[i].m_event.mpf_write = NULL;
+    }
+
+    // 初始化监听套接字
     for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
         int sock_fd = 0;
 
@@ -196,7 +199,7 @@ int hixo_init_listenings(void)
         sock_fd = socket(PF_INET, SOCK_STREAM, 0);
         tmp_err = (-1 == sock_fd) ? errno : 0;
         if (ESUCCESS == tmp_err) {
-            ga_hixo_listenings[i].m_fd = sock_fd;
+            ga_hixo_listenings[i].m_event.m_fd = sock_fd;
             ga_hixo_listenings[i].m_status = OPENED;
         } else {
             ga_hixo_listenings[i].m_status = CLOSED;
@@ -209,14 +212,14 @@ int hixo_init_listenings(void)
         if (OPENED != ga_hixo_listenings[i].m_status) {
             continue;
         }
-        
+
         errno = 0;
-        ret = unblocking_fd(ga_hixo_listenings[i].m_fd);
+        ret = unblocking_fd(ga_hixo_listenings[i].m_event.m_fd);
         tmp_err = (-1 == ret) ? errno : 0;
         if (ESUCCESS == tmp_err) {
             ga_hixo_listenings[i].m_status = CONFIGURED;
         } else {
-            (void)close(ga_hixo_listenings[i].m_fd);
+            (void)close(ga_hixo_listenings[i].m_event.m_fd);
             ga_hixo_listenings[i].m_status = CLOSED;
         }
     }
@@ -234,14 +237,16 @@ int hixo_init_listenings(void)
         srv_addr.sin_port = htons(SRV_ADDRS[i].m_port);
 
         errno = 0;
-        ret = bind(ga_hixo_listenings[i].m_fd,
+        ret = bind(ga_hixo_listenings[i].m_event.m_fd,
                    (struct sockaddr *)&srv_addr,
                    sizeof(srv_addr));
         tmp_err = (-1 == ret) ? errno : 0;
         if (ESUCCESS == tmp_err) {
             ga_hixo_listenings[i].m_status = BOUND;
         } else {
-            (void)close(ga_hixo_listenings[i].m_fd);
+            fprintf(stderr, "[ERROR] bind() failed: %d\n", tmp_err);
+
+            (void)close(ga_hixo_listenings[i].m_event.m_fd);
             ga_hixo_listenings[i].m_status = CLOSED;
         }
     }
@@ -255,7 +260,7 @@ int hixo_init_listenings(void)
         }
 
         errno = 0;
-        ret = listen(ga_hixo_listenings[i].m_fd,
+        ret = listen(ga_hixo_listenings[i].m_event.m_fd,
                      (SRV_ADDRS[i].m_backlog > 0)
                          ? SRV_ADDRS[i].m_backlog
                          : SOMAXCONN);
@@ -264,7 +269,7 @@ int hixo_init_listenings(void)
             ga_hixo_listenings[i].m_status = LISTENING;
             ++arrived_count;
         } else {
-            (void)close(ga_hixo_listenings[i].m_fd);
+            (void)close(ga_hixo_listenings[i].m_event.m_fd);
             ga_hixo_listenings[i].m_status = CLOSED;
         }
     }
@@ -280,7 +285,7 @@ void hixo_uninit_listenings(void)
 {
     for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
         if (ga_hixo_listenings[i].m_status > CLOSED) {
-            (void)close(ga_hixo_listenings[i].m_fd);
+            (void)close(ga_hixo_listenings[i].m_event.m_fd);
             ga_hixo_listenings[i].m_status = CLOSED;
         }
     }
@@ -290,7 +295,7 @@ void hixo_uninit_listenings(void)
 
 typedef struct {
     int (*mpf_init)(void);
-    int (*mpf_add_event)(hixo_connection_t *);
+    void (*mpf_add_event)(hixo_event_t *);
     int (*mpf_mod_event)(void);
     int (*mpf_del_event)(void);
     int (*mpf_process_events)(void);
@@ -309,7 +314,7 @@ typedef struct {
 
 // epoll模块
 static int epoll_init(void);
-static int epoll_add_event(hixo_connection_t *p_ev);
+static void epoll_add_event(hixo_event_t *p_ev);
 static int epoll_mod_event(void);
 static int epoll_del_event(void);
 static int epoll_process_events(void);
@@ -332,7 +337,6 @@ int epoll_init(void)
 {
     int rslt = 0;
     int tmp_err = 0;
-    struct epoll_event epev;
 
     #define epev_size sizeof(struct epoll_event)
     s_epoll_module_ctx.mp_misc = calloc(MAX_CONNECTIONS, epev_size);
@@ -354,15 +358,23 @@ int epoll_init(void)
     s_epoll_module_ctx.m_fd = rslt;
 
     for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-
+        epoll_add_event(&ga_hixo_listenings[i].m_event);
     }
 
     return HIXO_OK;
 }
 
-int epoll_add_event(hixo_connection_t *p_ev)
+void epoll_add_event(hixo_event_t *p_ev)
 {
-    return HIXO_OK;
+    struct epoll_event epev;
+
+    epev.events = p_ev->m_ev_flags;
+    epev.data.ptr = p_ev;
+    (void)epoll_ctl(s_epoll_module_ctx.m_fd,
+                    EPOLL_CTL_ADD,
+                    p_ev->m_fd,
+                    &epev);
+    return;
 }
 
 int epoll_mod_event(void)
@@ -392,20 +404,24 @@ int epoll_process_events(void)
     tmp_err = (-1 == nevents) ? errno : 0;
     if (tmp_err) {
         if (EINTR == tmp_err) {
-            return HIXO_OK; 
+            return HIXO_OK;
         } else {
             fprintf(stderr, "[ERROR] epoll_wait failed: %d\n", tmp_err);
 
             return HIXO_ERROR;
         }
     }
-    
+
     if (0 == nevents) { // timeout
         return HIXO_OK;
     }
 
     for (int i = 0; i < nevents; ++i) {
         hixo_event_t *p_ev = (hixo_event_t *)p_epevs[i].data.ptr;
+
+        if (p_ev->m_overdue) { // 过期事件
+            continue;
+        }
 
         if (p_epevs[i].events & (EPOLLERR | EPOLLHUP)) {
         }
@@ -458,7 +474,7 @@ static int worker_main(void)
 {
     int rslt = 0;
     hixo_event_module_ctx_t const *pc_ev_ctx = NULL;
-    
+
     for (int i = 0; i < ARRAY_COUNT(g_modules); ++i) {
         if (HIXO_EVENT != g_modules[i]->m_type) {
             continue;
@@ -552,7 +568,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
         if (LISTENING == ga_hixo_listenings[i].m_status) {
             assert(HIXO_OK == bitmap_set(&g_lsn_sockets_bm,
-                                         ga_hixo_listenings[i].m_fd));
+                                         ga_hixo_listenings[i].m_event.m_fd));
         }
     }
 
