@@ -21,12 +21,13 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
+#include <assert.h>
 
 #include "list.h"
 
@@ -70,7 +71,7 @@ struct {
 
 // bitmap {{
 typedef struct {
-    byte_t *mp_data;
+    uint8_t *mp_data;
     uint32_t m_size;
 } bitmap_t;
 
@@ -80,43 +81,44 @@ int create_bitmap(bitmap_t *p_bm, uint32_t nbits)
         return HIXO_ERROR;
     }
 
-    p_bm->m_size = nbits / sizeof(byte_t) + 1;
-    p_bm->mp_data = calloc(1, p_bm->m_size);
+    p_bm->m_size = (nbits - 1) / 8 + 1;
+    p_bm->mp_data = (uint8_t *)calloc(1, p_bm->m_size);
     if (NULL == p_bm->mp_data) {
         return HIXO_ERROR;
     }
     (void)memset(p_bm->mp_data, 0, p_bm->m_size);
+
+    return HIXO_OK;
 }
 
 int bitmap_set(bitmap_t *p_bm, uint32_t bit_offset)
 {
-    uint32_t byte_offset = bit_offset / sizeof(byte_t);
-    uint32_t byte_bit_offset = bit_offset % sizeof(byte_t);
+    uint32_t byte_offset = bit_offset / 8;
+    uint32_t byte_bit_offset = bit_offset % 8;
 
-    if (bit_offset > (sizeof(byte_t) * p_bm->m_size - 1)) {
+    if (bit_offset > (8 * p_bm->m_size - 1)) {
         fprintf(stderr, "[ERROR] bitmap bit_offset out of range\n");
 
         return HIXO_ERROR;
     }
     
-    p_bm->mp_data[byte_offset] &= 1 << (sizeof(byte_t) - byte_bit_offset);
+    p_bm->mp_data[byte_offset] |= 1 << byte_bit_offset;
 
     return HIXO_OK;
 }
 
 int bitmap_is_set(bitmap_t *p_bm, uint32_t bit_offset)
 {
-    uint32_t byte_offset = bit_offset / sizeof(byte_t);
-    uint32_t byte_bit_offset = bit_offset % sizeof(byte_t);
+    uint32_t byte_offset = bit_offset / 8;
+    uint32_t byte_bit_offset = bit_offset % 8;
 
-    if (bit_offset > (sizeof(byte_t) * p_bm->m_size - 1)) {
+    if (bit_offset > (8 * p_bm->m_size - 1)) {
         fprintf(stderr, "[ERROR] bitmap bit_offset out of range\n");
 
-        return HIXO_ERROR;
+        return FALSE;
     }
 
-    if (p_bm->mp_data[byte_offset]
-            & (1 << (sizeof(byte_t) - byte_bit_offset)))
+    if (p_bm->mp_data[byte_offset] & (1 << byte_bit_offset))
     {
         return TRUE;
     } else {
@@ -140,6 +142,15 @@ typedef enum {
     HIXO_CORE,
     HIXO_EVENT,
 } hixo_module_type_t;
+
+typedef struct s_hixo_event_t hixo_event_t;
+struct s_hixo_event_t {
+    int m_fd;
+    uint32_t m_ev_flags;
+    int m_overdue;
+    int (*mpf_read)(hixo_event_t *);
+    int (*mpf_write)(hixo_event_t *);
+};
 
 typedef struct s_hixo_connection_t hixo_connection_t;
 struct s_hixo_connection_t {
@@ -167,12 +178,10 @@ typedef struct s_hixo_listening_t hixo_listening_t;
 struct s_hixo_listening_t {
     int m_fd;
     listening_status_t m_status;
-    list_t *mp_conn_list;
+    hixo_event_t m_event;
 };
 
-hixo_listening_t ga_hixo_listenings[SRV_ADDRS_COUNT] = {
-    {0, CLOSED, NULL},
-};
+hixo_listening_t ga_hixo_listenings[SRV_ADDRS_COUNT] = {};
 
 int hixo_init_listenings(void)
 {
@@ -263,6 +272,10 @@ int hixo_init_listenings(void)
     return arrived_count ? HIXO_OK : HIXO_ERROR;
 }
 
+void hixo_connection_handler(void)
+{
+}
+
 void hixo_uninit_listenings(void)
 {
     for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
@@ -317,7 +330,9 @@ static hixo_event_module_ctx_t s_epoll_module_ctx = {
 
 int epoll_init(void)
 {
+    int rslt = 0;
     int tmp_err = 0;
+    struct epoll_event epev;
 
     #define epev_size sizeof(struct epoll_event)
     s_epoll_module_ctx.mp_misc = calloc(MAX_CONNECTIONS, epev_size);
@@ -329,14 +344,20 @@ int epoll_init(void)
     }
 
     errno = 0;
-    s_epoll_module_ctx.m_fd = epoll_create(MAX_CONNECTIONS);
-    tmp_err = (-1 == s_epoll_module_ctx.m_fd) ? errno : 0;
+    rslt = epoll_create(MAX_CONNECTIONS);
+    tmp_err = (-1 == rslt) ? errno : 0;
     if (tmp_err) {
         fprintf(stderr, "[ERROR] epoll_create failed: %d\n", tmp_err);
+
         return HIXO_ERROR;
-    } else {
-        return HIXO_OK;
     }
+    s_epoll_module_ctx.m_fd = rslt;
+
+    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
+
+    }
+
+    return HIXO_OK;
 }
 
 int epoll_add_event(hixo_connection_t *p_ev)
@@ -359,13 +380,13 @@ int epoll_process_events(void)
     int nevents = 0;
     int tmp_err = 0;
     int timer = -1;
-    struct epoll_event *p_evs = NULL;
+    struct epoll_event *p_epevs = NULL;
 
-    p_evs = (struct epoll_event *)s_epoll_module_ctx.mp_misc;
+    p_epevs = (struct epoll_event *)s_epoll_module_ctx.mp_misc;
 
     errno = 0;
     nevents = epoll_wait(s_epoll_module_ctx.m_fd,
-                         p_evs,
+                         p_epevs,
                          MAX_CONNECTIONS,
                          timer);
     tmp_err = (-1 == nevents) ? errno : 0;
@@ -384,23 +405,15 @@ int epoll_process_events(void)
     }
 
     for (int i = 0; i < nevents; ++i) {
-        hixo_connection_t *p_conn = (hixo_connection_t *)p_evs[i].data.ptr;
+        hixo_event_t *p_ev = (hixo_event_t *)p_epevs[i].data.ptr;
 
-        if (p_evs[i].events & (EPOLLERR | EPOLLHUP)) {
-            p_conn->m_shut_read = TRUE;
-            p_conn->m_shut_write = TRUE;
-            add_node(&s_epoll_module_ctx.mp_shut_read_list,
-                     &p_conn->m_shut_read_node);
-            add_node(&s_epoll_module_ctx.mp_shut_write_list,
-                     &p_conn->m_shut_write_node);
+        if (p_epevs[i].events & (EPOLLERR | EPOLLHUP)) {
         }
 
-        if ((p_evs[i].events & EPOLLIN) && (!p_conn->m_shut_read)) {
-            (*p_conn->mpf_read)(p_conn);
+        if ((p_epevs[i].events & EPOLLIN) && (!p_ev->m_overdue)) {
         }
 
-        if ((p_evs[i].events & EPOLLOUT) && (!p_conn->m_shut_write)) {
-            (*p_conn->mpf_read)(p_conn);
+        if ((p_epevs[i].events & EPOLLOUT) && (!p_ev->m_overdue)) {
         }
     }
 
@@ -431,10 +444,6 @@ hixo_module_t *g_modules[] = {
 };
 
 
-static struct {
-    int m_fd;
-    int m_valid;
-} s_lsn_sockets[ARRAY_COUNT(SRV_ADDRS)] = {};
 bitmap_t g_lsn_sockets_bm = {NULL, 0};
 int g_master = TRUE;
 
@@ -476,19 +485,6 @@ static int worker_main(void)
 static int hixo_main(void)
 {
     int rslt = 0;
-    struct rlimit rlmt;
-    int tmp_err = 0;
-    int *p_file_no = (int *)&g_sysconf.MAX_FILE_NO;
-
-    errno = 0;
-    rslt = getrlimit(RLIMIT_NOFILE, &rlmt);
-    tmp_err = (-1 == rslt) ? errno : 0;
-    if (tmp_err) {
-        fprintf(stderr, "[ERROR] getrlimit() failed: %d\n", tmp_err);
-
-        return HIXO_ERROR;
-    }
-    *p_file_no = rlmt.rlim_cur;
 
     if (DAEMON) {
     }
@@ -516,16 +512,58 @@ static int hixo_main(void)
     return rslt;
 }
 
+static int hixo_init_sysconf(void)
+{
+    int rslt = 0;
+    int tmp_err = 0;
+    struct rlimit rlmt;
+    int *p_file_no = (int *)&g_sysconf.MAX_FILE_NO;
+
+    errno = 0;
+    rslt = getrlimit(RLIMIT_NOFILE, &rlmt);
+    tmp_err = (-1 == rslt) ? errno : 0;
+    if (tmp_err) {
+        fprintf(stderr, "[ERROR] getrlimit() failed: %d\n", tmp_err);
+
+        return HIXO_ERROR;
+    }
+    *p_file_no = rlmt.rlim_cur;
+
+    return HIXO_OK;
+}
+
 int main(int argc, char *argv[])
 {
     int rslt = EXIT_FAILURE;
 
     if (HIXO_ERROR == hixo_init_listenings()) {
-        return EXIT_FAILURE;
+        goto ERR_INIT_LISTENINGS;
+    }
+
+    if (HIXO_ERROR == hixo_init_sysconf()) {
+        goto ERR_INIT_SYSCONF;
+    }
+
+    if (HIXO_ERROR == create_bitmap(&g_lsn_sockets_bm,
+                                    g_sysconf.MAX_FILE_NO))
+    {
+        goto ERR_CREATE_BITMAP;
+    }
+    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
+        if (LISTENING == ga_hixo_listenings[i].m_status) {
+            assert(HIXO_OK == bitmap_set(&g_lsn_sockets_bm,
+                                         ga_hixo_listenings[i].m_fd));
+        }
     }
 
     rslt = (HIXO_ERROR == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
 
+ERR_CREATE_BITMAP:
+    if (g_master) {
+        destroy_bitmap(&g_lsn_sockets_bm);
+    }
+ERR_INIT_SYSCONF:
+ERR_INIT_LISTENINGS:
     if (g_master) {
         hixo_uninit_listenings();
     }

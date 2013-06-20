@@ -24,14 +24,12 @@ extern "C" {
 #define FALSE           0
 #define TRUE            (!FALSE)
 
-typedef unsigned char byte_t;
-
 #define ARRAY_COUNT(a)      (sizeof(a) / sizeof(a[0]))
 #define OFFSET_OF(s, m)     ((intptr_t)&(((s *)0)->m ))
 #define CONTAINER_OF(ptr, type, member)     \
             ({\
                 const typeof(((type *)0)->member) *p_mptr = (ptr);\
-                (type *)((byte_t *)p_mptr - OFFSET_OF(type, member));\
+                (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
             })
 
 
