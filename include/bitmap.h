@@ -13,6 +13,10 @@
 // limitations under the License.
 
 
+#ifndef __BITMAP_H__
+#define __BITMAP_H__
+
+
 #include "hixo.h"
 
 typedef struct {
@@ -84,3 +88,4 @@ void destroy_bitmap(bitmap_t *p_bm)
     }
     p_bm->m_size = 0;
 }
+#endif // __BITMAP_H__

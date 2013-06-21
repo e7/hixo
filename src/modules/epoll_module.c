@@ -14,7 +14,7 @@
 
 
 // epoll事件模块
-#include "event.h"
+#include "event_module.h"
 
 static int epoll_init(void);
 static void epoll_add_event(hixo_event_t *p_ev);
@@ -37,7 +37,7 @@ static hixo_event_module_ctx_t s_epoll_module_ctx = {
 };
 
 hixo_module_t g_epoll_module = {
-    HIXO_EVENT,
+    HIXO_MODULE_EVENT,
     &s_epoll_module_ctx,
 };
 

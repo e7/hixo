@@ -13,31 +13,12 @@
 // limitations under the License.
 
 
-#include "core_module.h"
+#ifndef __CORE_MODULE_H__
+#define __CORE_MODULE_H__
 
+#include "hixo.h"
 
-static hixo_core_module_ctx_t s_core_module_ctx = {};
-
-static int main_core_init(void)
-{
-    fprintf(stderr, "[INFO] i'm main_core_init\n");
-
-    return HIXO_OK;
-}
-
-static void main_core_exit(void)
-{
-    fprintf(stderr, "[INFO] i'm main_core_exit\n");
-
-    return HIXO_OK;
-}
-
-hixo_module_t g_main_core_module = {
-    HIXO_MODULE_CORE,
-    &s_core_module_ctx,
-    &main_core_init,
-    NULL,
-    NULL,
-    &main_core_exit,
-};
-
+typedef struct {
+    int m_unused;
+} hixo_core_module_ctx_t; 
+#endif // __CORE_MODULE_H__

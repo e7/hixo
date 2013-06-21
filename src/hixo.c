@@ -15,7 +15,7 @@
 
 #include "list.h"
 #include "bitmap.h"
-#include "event.h"
+#include "event_module.h"
 
 
 // sysconf {{
@@ -148,15 +148,9 @@ void hixo_uninit_listenings(void)
 // }} hixo_listen_t
 
 
-// 主核心模块
-hixo_module_t g_main_core_module = {
-    HIXO_CORE,
-    NULL,
-};
-
-
 // 模块数组
-hixo_module_t *g_modules[] = {
+hixo_module_t *gap_modules[] = {
+    &g_main_core_module,
     &g_epoll_module,
 };
 
@@ -176,17 +170,18 @@ static int worker_main(void)
     int rslt = 0;
     hixo_event_module_ctx_t const *pc_ev_ctx = NULL;
 
-    for (int i = 0; i < ARRAY_COUNT(g_modules); ++i) {
-        if (HIXO_EVENT != g_modules[i]->m_type) {
+    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+        if (HIXO_MODULE_EVENT != gap_modules[i]->m_type) {
             continue;
         }
 
-        pc_ev_ctx = (hixo_event_module_ctx_t *)g_modules[i]->mp_ctx;
+        pc_ev_ctx = (hixo_event_module_ctx_t *)gap_modules[i]->mp_ctx;
         rslt = (*pc_ev_ctx->mpf_init)();
         if (-1 == rslt) {
             break;
         }
     }
+
 
     while (TRUE) {
         rslt = (*pc_ev_ctx->mpf_process_events)();
@@ -251,6 +246,7 @@ static int hixo_init_sysconf(void)
 
 int main(int argc, char *argv[])
 {
+#if 0
     int rslt = EXIT_FAILURE;
 
     if (HIXO_ERROR == hixo_init_listenings()) {
@@ -286,4 +282,42 @@ ERR_INIT_LISTENINGS:
     }
 
     return rslt;
+
+#else
+
+    int rslt = EXIT_FAILURE;
+    int core_module_max = 0;
+    int fatal_err = FALSE;
+
+    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+        core_module_max = i;
+
+        if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+            continue;
+        }
+
+        if (HIXO_ERROR == (*gap_modules[i]->mpf_init_master)()) {
+            fatal_err = TRUE;
+
+            break;
+        }
+    }
+
+    if (fatal_err) {
+        goto ERR_INIT_MASTER;
+    }
+
+ERR_INIT_MASTER:
+    if (g_master) {
+        for (int i = 0; i < core_module_max; ++i) {
+            if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+                continue;
+            }
+            
+            (*gap_modules[i]->mpf_exit_master)();
+        }
+    }
+
+    return rslt;
+#endif
 }

@@ -67,12 +67,20 @@ static addr_t const SRV_ADDRS[] = {
 // }} config
 
 typedef enum {
-    HIXO_CORE,
-    HIXO_EVENT,
+    HIXO_MODULE_CORE,
+    HIXO_MODULE_EVENT,
 } hixo_module_type_t;
 
 typedef struct {
     hixo_module_type_t m_type;
     void *mp_ctx;
+    int (*mpf_init_master)(void);
+    int (*mpf_init_worker)(void);
+    void (*mpf_exit_worker)(void);
+    void (*mpf_exit_master)(void);
 } hixo_module_t;
+
+// modules
+extern hixo_module_t g_main_core_module;
+extern hixo_module_t g_epoll_module;
 #endif // __HIXO_H__

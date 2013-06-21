@@ -17,8 +17,8 @@
 #define __EVENT_H__
 
 #include "list.h"
+#include "bitmap.h"
 
-extern hixo_module_t g_epoll_module;
 
 typedef enum {
     CLOSED = 0x00000001,
