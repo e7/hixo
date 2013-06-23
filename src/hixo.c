@@ -289,6 +289,10 @@ ERR_INIT_LISTENINGS:
     int core_module_max = 0;
     int fatal_err = FALSE;
 
+    if (-1 == hixo_init_sysconf()) {
+        goto ERR_INIT_SYSCONF;
+    }
+
     for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
         core_module_max = i;
 
@@ -317,6 +321,7 @@ ERR_INIT_MASTER:
             (*gap_modules[i]->mpf_exit_master)();
         }
     }
+ERR_INIT_SYSCONF:
 
     return rslt;
 #endif
