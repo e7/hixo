@@ -17,7 +17,7 @@
 #define __BITMAP_H__
 
 
-#include "hixo.h"
+#include "common.h"
 
 typedef struct {
     uint8_t *mp_data;

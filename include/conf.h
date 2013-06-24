@@ -13,12 +13,30 @@
 // limitations under the License.
 
 
-#ifndef __CORE_MODULE_H__
-#define __CORE_MODULE_H__
+#ifndef __CONF_H__
+#define __CONF_H__
 
 #include "common.h"
 
+
 typedef struct {
-    int m_unused;
-} hixo_core_module_ctx_t; 
-#endif // __CORE_MODULE_H__
+    uint32_t m_ip;
+    uint16_t m_port;
+    int m_backlog;
+} hixo_listen_conf_t;
+
+typedef struct s_conf_t {
+    int m_daemon;
+    int m_worker_processes;
+    int m_max_connections;
+    int m_max_events;
+    int m_timer_resolution;
+    int m_connection_timeout;
+    hixo_listen_conf_t const **mppc_srv_addrs;
+    int m_nservers;
+} hixo_conf_t;
+
+extern hixo_conf_t g_conf;
+extern int create_conf(hixo_conf_t *p_conf);
+extern void destroy_conf(hixo_conf_t *p_conf);
+#endif // __CONF_H__

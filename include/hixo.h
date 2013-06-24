@@ -13,58 +13,13 @@
 // limitations under the License.
 
 
-#include <unistd.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/resource.h>
-#include <sys/socket.h>
-#include <sys/epoll.h>
-#include <arpa/inet.h>
-#include <errno.h>
-
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <assert.h>
-
-#include "common.h"
+#include "list.h"
+#include "bitmap.h"
 
 
 #ifndef __HIXO_H__
 #define __HIXO_H__
 
-#ifndef ESUCCESS
-    #define ESUCCESS        (0)
-#endif
-#define HIXO_OK             (0)
-#define HIXO_ERROR          (-1)
-#define unblocking_fd(fd)   fcntl(fd, \
-                                  F_SETFL, \
-                                  fcntl(fd, F_GETFL) | O_NONBLOCK)
-
-// config {{
-typedef struct {
-    uint32_t m_ip;
-    uint16_t m_port;
-    int m_backlog;
-} addr_t;
-
-#define DAEMON                  FALSE
-#define WORKER_PROCESSES        4
-#define MAX_CONNECTIONS         512
-#define MAX_EVENTS              512
-#define TIMER_RESOLUTION        20
-#define CONNECTION_TIME_OUT     60
-static addr_t const SRV_ADDRS[] = {
-    {INADDR_ANY, 80,   0},
-    {INADDR_ANY, 8888, 0},
-    {INADDR_ANY, 8889, 0},
-    {INADDR_ANY, 8890, 0},
-};
-#define SRV_ADDRS_COUNT         ARRAY_COUNT(SRV_ADDRS)
-// }} config
 
 typedef enum {
     HIXO_MODULE_CORE,
@@ -79,6 +34,19 @@ typedef struct {
     void (*mpf_exit_worker)(void);
     void (*mpf_exit_master)(void);
 } hixo_module_t;
+
+typedef struct s_socket_t hixo_socket_t;
+struct s_socket_t {
+    int m_fd;
+    int (*mpf_read)(void);
+    int (*mpf_write)(void);
+};
+
+typedef struct {
+    hixo_socket_t *mp_listeners;
+} hixo_rt_context_t;
+
+extern hixo_rt_context_t g_rt_ctx;
 
 // modules
 extern hixo_module_t g_main_core_module;

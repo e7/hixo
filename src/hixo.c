@@ -13,140 +13,14 @@
 // limitations under the License.
 
 
-#include "list.h"
-#include "bitmap.h"
+#include "conf.h"
 #include "event_module.h"
 
 
-// sysconf {{
 struct {
     int const MAX_FILE_NO;
-} g_sysconf;
-// }} sysconf
-
-// hixo_listen_t {{
-hixo_socket_t ga_hixo_listenings[SRV_ADDRS_COUNT] = {};
-
-static int hixo_handle_accept(hixo_event_t *p_ev)
-{
-    return HIXO_OK;
-}
-
-int hixo_init_listenings(void)
-{
-    int tmp_err = 0;
-    int arrived_count = 0;
-    struct sockaddr_in srv_addr;
-
-    // 初始化监听套接字事件体
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        ga_hixo_listenings[i].m_event.m_ev_flags = EPOLLET | EPOLLIN;
-        ga_hixo_listenings[i].m_event.m_overdue = FALSE;
-        ga_hixo_listenings[i].m_event.mpf_read = &hixo_handle_accept;
-        ga_hixo_listenings[i].m_event.mpf_write = NULL;
-    }
-
-    // 初始化监听套接字
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        int sock_fd = 0;
-
-        errno = 0;
-        sock_fd = socket(PF_INET, SOCK_STREAM, 0);
-        tmp_err = (-1 == sock_fd) ? errno : 0;
-        if (ESUCCESS == tmp_err) {
-            ga_hixo_listenings[i].m_event.m_fd = sock_fd;
-            ga_hixo_listenings[i].m_status = OPENED;
-        } else {
-            ga_hixo_listenings[i].m_status = CLOSED;
-        }
-    }
-
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        int ret = 0;
-
-        if (OPENED != ga_hixo_listenings[i].m_status) {
-            continue;
-        }
-
-        errno = 0;
-        ret = unblocking_fd(ga_hixo_listenings[i].m_event.m_fd);
-        tmp_err = (-1 == ret) ? errno : 0;
-        if (ESUCCESS == tmp_err) {
-            ga_hixo_listenings[i].m_status = CONFIGURED;
-        } else {
-            (void)close(ga_hixo_listenings[i].m_event.m_fd);
-            ga_hixo_listenings[i].m_status = CLOSED;
-        }
-    }
-
-    (void)memset(&srv_addr, 0, sizeof(srv_addr));
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        int ret = 0;
-
-        if (CONFIGURED != ga_hixo_listenings[i].m_status) {
-            continue;
-        }
-
-        srv_addr.sin_family = AF_INET;
-        srv_addr.sin_addr.s_addr = htonl(SRV_ADDRS[i].m_ip);
-        srv_addr.sin_port = htons(SRV_ADDRS[i].m_port);
-
-        errno = 0;
-        ret = bind(ga_hixo_listenings[i].m_event.m_fd,
-                   (struct sockaddr *)&srv_addr,
-                   sizeof(srv_addr));
-        tmp_err = (-1 == ret) ? errno : 0;
-        if (ESUCCESS == tmp_err) {
-            ga_hixo_listenings[i].m_status = BOUND;
-        } else {
-            fprintf(stderr, "[ERROR] bind() failed: %d\n", tmp_err);
-
-            (void)close(ga_hixo_listenings[i].m_event.m_fd);
-            ga_hixo_listenings[i].m_status = CLOSED;
-        }
-    }
-
-    arrived_count = 0;
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        int ret = 0;
-
-        if (BOUND != ga_hixo_listenings[i].m_status) {
-            continue;
-        }
-
-        errno = 0;
-        ret = listen(ga_hixo_listenings[i].m_event.m_fd,
-                     (SRV_ADDRS[i].m_backlog > 0)
-                         ? SRV_ADDRS[i].m_backlog
-                         : SOMAXCONN);
-        tmp_err = (-1 == ret) ? errno : 0;
-        if (ESUCCESS == tmp_err) {
-            ga_hixo_listenings[i].m_status = LISTENING;
-            ++arrived_count;
-        } else {
-            (void)close(ga_hixo_listenings[i].m_event.m_fd);
-            ga_hixo_listenings[i].m_status = CLOSED;
-        }
-    }
-
-    return arrived_count ? HIXO_OK : HIXO_ERROR;
-}
-
-void hixo_connection_handler(void)
-{
-}
-
-void hixo_uninit_listenings(void)
-{
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        if (ga_hixo_listenings[i].m_status > CLOSED) {
-            (void)close(ga_hixo_listenings[i].m_event.m_fd);
-            ga_hixo_listenings[i].m_status = CLOSED;
-        }
-    }
-}
-// }} hixo_listen_t
-
+} g_sysconf = {};
+hixo_rt_context_t g_rt_ctx = {};
 
 // 模块数组
 hixo_module_t *gap_modules[] = {
@@ -198,11 +72,11 @@ static int hixo_main(void)
 {
     int rslt = 0;
 
-    if (DAEMON) {
+    if (g_conf.m_daemon) {
     }
 
     // 分裂进程
-    for (int i = 0; i < WORKER_PROCESSES; ++i) {
+    for (int i = 0; i < g_conf.m_worker_processes; ++i) {
         pid_t cpid = fork();
         if (-1 == cpid) {
             return -1;
@@ -246,47 +120,7 @@ static int hixo_init_sysconf(void)
 
 int main(int argc, char *argv[])
 {
-#if 0
     int rslt = EXIT_FAILURE;
-
-    if (HIXO_ERROR == hixo_init_listenings()) {
-        goto ERR_INIT_LISTENINGS;
-    }
-
-    if (HIXO_ERROR == hixo_init_sysconf()) {
-        goto ERR_INIT_SYSCONF;
-    }
-
-    if (HIXO_ERROR == create_bitmap(&g_lsn_sockets_bm,
-                                    g_sysconf.MAX_FILE_NO))
-    {
-        goto ERR_CREATE_BITMAP;
-    }
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-        if (LISTENING == ga_hixo_listenings[i].m_status) {
-            assert(HIXO_OK == bitmap_set(&g_lsn_sockets_bm,
-                                         ga_hixo_listenings[i].m_event.m_fd));
-        }
-    }
-
-    rslt = (HIXO_ERROR == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
-
-ERR_CREATE_BITMAP:
-    if (g_master) {
-        destroy_bitmap(&g_lsn_sockets_bm);
-    }
-ERR_INIT_SYSCONF:
-ERR_INIT_LISTENINGS:
-    if (g_master) {
-        hixo_uninit_listenings();
-    }
-
-    return rslt;
-
-#else
-
-    int rslt = EXIT_FAILURE;
-    int core_module_max = 0;
     int fatal_err = FALSE;
 
     if (-1 == hixo_init_sysconf()) {
@@ -294,8 +128,6 @@ ERR_INIT_LISTENINGS:
     }
 
     for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
-        core_module_max = i;
-
         if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
             continue;
         }
@@ -311,9 +143,11 @@ ERR_INIT_LISTENINGS:
         goto ERR_INIT_MASTER;
     }
 
+    rslt = (HIXO_OK == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
+
 ERR_INIT_MASTER:
     if (g_master) {
-        for (int i = 0; i < core_module_max; ++i) {
+        for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
             if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
                 continue;
             }
@@ -324,5 +158,4 @@ ERR_INIT_MASTER:
 ERR_INIT_SYSCONF:
 
     return rslt;
-#endif
 }

@@ -16,7 +16,7 @@
 #ifndef __LIST_H__
 #define __LIST_H__
 
-#include "hixo.h"
+#include "common.h"
 
 #if __cplusplus
 extern "C" {

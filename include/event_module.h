@@ -16,34 +16,12 @@
 #ifndef __EVENT_H__
 #define __EVENT_H__
 
-#include "list.h"
-#include "bitmap.h"
+#include "hixo.h"
 
 
-typedef enum {
-    CLOSED = 0x00000001,
-    OPENED = (CLOSED << 1) + 1,
-    CONFIGURED = OPENED + 1,
-    BOUND = CONFIGURED + 1,
-    LISTENING = BOUND + 1,
-    CONNECTED = (CLOSED << 2) + 1,
-    BROKEN = (CLOSED << 3) + 1,
-} socket_status_t;
-
-typedef struct s_hixo_event_t hixo_event_t;
-struct s_hixo_event_t {
-    int m_fd;
-    uint32_t m_ev_flags;
-    int m_overdue;
-    int (*mpf_read)(hixo_event_t *);
-    int (*mpf_write)(hixo_event_t *);
-};
-
-typedef struct s_hixo_socket_t hixo_socket_t;
-struct s_hixo_socket_t {
-    socket_status_t m_status;
-    hixo_event_t m_event;
-};
+typedef struct {
+    int m_event_fd;
+} hixo_event_t;
 
 typedef struct {
     int (*mpf_init)(void);

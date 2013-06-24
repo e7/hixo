@@ -16,6 +16,22 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/epoll.h>
+#include <arpa/inet.h>
+#include <errno.h>
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -32,6 +48,15 @@ extern "C" {
                 (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
             })
 
+#ifndef ESUCCESS
+    #define ESUCCESS        (0)
+#endif
+#define HIXO_OK             (0)
+#define HIXO_ERROR          (-1)
+#define INVALID_FD          (~0)
+#define unblocking_fd(fd)   fcntl(fd, \
+                                  F_SETFL, \
+                                  fcntl(fd, F_GETFL) | O_NONBLOCK)
 
 #ifdef __cplusplus
 }

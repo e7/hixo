@@ -14,6 +14,7 @@
 
 
 // epoll事件模块
+#include "conf.h"
 #include "event_module.h"
 
 static int epoll_init(void);
@@ -47,7 +48,7 @@ int epoll_init(void)
     int tmp_err = 0;
 
     #define epev_size sizeof(struct epoll_event)
-    s_epoll_module_ctx.mp_misc = calloc(MAX_CONNECTIONS, epev_size);
+    s_epoll_module_ctx.mp_misc = calloc(g_conf.m_max_events, epev_size);
     #undef epev_size
     if (NULL == s_epoll_module_ctx.mp_misc) {
         fprintf(stderr, "[ERROR] out of memory\n");
@@ -56,7 +57,7 @@ int epoll_init(void)
     }
 
     errno = 0;
-    rslt = epoll_create(MAX_CONNECTIONS);
+    rslt = epoll_create(g_conf.m_max_connections);
     tmp_err = (-1 == rslt) ? errno : 0;
     if (tmp_err) {
         fprintf(stderr, "[ERROR] epoll_create failed: %d\n", tmp_err);
@@ -65,9 +66,7 @@ int epoll_init(void)
     }
     s_epoll_module_ctx.m_fd = rslt;
 
-    for (int i = 0; i < SRV_ADDRS_COUNT; ++i) {
-extern hixo_socket_t ga_hixo_listenings[];
-        epoll_add_event(&ga_hixo_listenings[i].m_event);
+    for (int i = 0; i < g_conf.m_nservers; ++i) {
     }
 
     return HIXO_OK;
@@ -77,12 +76,6 @@ void epoll_add_event(hixo_event_t *p_ev)
 {
     struct epoll_event epev;
 
-    epev.events = p_ev->m_ev_flags;
-    epev.data.ptr = p_ev;
-    (void)epoll_ctl(s_epoll_module_ctx.m_fd,
-                    EPOLL_CTL_ADD,
-                    p_ev->m_fd,
-                    &epev);
     return;
 }
 
@@ -108,7 +101,7 @@ int epoll_process_events(void)
     errno = 0;
     nevents = epoll_wait(s_epoll_module_ctx.m_fd,
                          p_epevs,
-                         MAX_CONNECTIONS,
+                         g_conf.m_max_events,
                          timer);
     tmp_err = (-1 == nevents) ? errno : 0;
     if (tmp_err) {
@@ -126,20 +119,6 @@ int epoll_process_events(void)
     }
 
     for (int i = 0; i < nevents; ++i) {
-        hixo_event_t *p_ev = (hixo_event_t *)p_epevs[i].data.ptr;
-
-        if (p_ev->m_overdue) { // 过期事件
-            continue;
-        }
-
-        if (p_epevs[i].events & (EPOLLERR | EPOLLHUP)) {
-        }
-
-        if ((p_epevs[i].events & EPOLLIN) && (!p_ev->m_overdue)) {
-        }
-
-        if ((p_epevs[i].events & EPOLLOUT) && (!p_ev->m_overdue)) {
-        }
     }
 
     return HIXO_OK;
