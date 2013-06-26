@@ -18,11 +18,13 @@
 #include "event_module.h"
 
 static int epoll_init(void);
-static void epoll_add_event(hixo_event_t *p_ev);
+static void epoll_add_event(hixo_event_t *p_ev,
+                            uint32_t events,
+                            uint32_t flags);
 static int epoll_mod_event(void);
 static int epoll_del_event(void);
 static int epoll_process_events(void);
-static void epoll_uninit(void);
+static void epoll_exit(void);
 
 static hixo_event_module_ctx_t s_epoll_module_ctx = {
     &epoll_init,
@@ -30,7 +32,7 @@ static hixo_event_module_ctx_t s_epoll_module_ctx = {
     &epoll_mod_event,
     &epoll_del_event,
     &epoll_process_events,
-    &epoll_uninit,
+    &epoll_exit,
     -1,
     NULL,
     NULL,
@@ -72,7 +74,9 @@ int epoll_init(void)
     return HIXO_OK;
 }
 
-void epoll_add_event(hixo_event_t *p_ev)
+void epoll_add_event(hixo_event_t *p_ev,
+                     uint32_t events,
+                     uint32_t flags)
 {
     struct epoll_event epev;
 
@@ -124,7 +128,7 @@ int epoll_process_events(void)
     return HIXO_OK;
 }
 
-void epoll_uninit(void)
+void epoll_exit(void)
 {
     (void)close(s_epoll_module_ctx.m_fd);
 

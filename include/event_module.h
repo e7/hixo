@@ -19,13 +19,14 @@
 #include "hixo.h"
 
 
-typedef struct {
-    int m_event_fd;
-} hixo_event_t;
+typedef struct s_event_t hixo_event_t;
+struct s_event_t {
+    void (*mpf_event_handler)(hixo_event_t *);
+};
 
 typedef struct {
     int (*mpf_init)(void);
-    void (*mpf_add_event)(hixo_event_t *);
+    void (*mpf_add_event)(hixo_event_t *, uint32_t, uint32_t);
     int (*mpf_mod_event)(void);
     int (*mpf_del_event)(void);
     int (*mpf_process_events)(void);
