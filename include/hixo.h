@@ -29,6 +29,7 @@ typedef enum {
 // hixo_resource_t {{
 typedef struct {
     void *mp_data;
+    size_t m_offset; // offset of list node
     list_t *mp_inuse_list;
     list_t *mp_free_list;
 } hixo_resource_t;
@@ -58,6 +59,7 @@ int create_resource(hixo_resource_t *p_rsc,
 
         return HIXO_ERROR;
     }
+    p_rsc->m_offset = offset;
     p_rsc->mp_inuse_list = NULL;
     p_rsc->mp_free_list = NULL;
     for (int i = 0; i < count; ++i) {
@@ -71,7 +73,45 @@ int create_resource(hixo_resource_t *p_rsc,
 }
 
 static inline
-void destroy(hixo_resource_t *p_rsc)
+void *alloc_resource(hixo_resource_t *p_rsc)
+{
+    list_t *p_node = NULL;
+
+    if (NULL == p_rsc->mp_free_list) {
+        return NULL;
+    }
+    p_node = p_rsc->mp_free_list;
+    assert(rm_node(&p_rsc->mp_free_list, p_node));
+    add_node(&p_rsc->mp_inuse_list, p_node);
+
+    return ((uint8_t *)p_node) - p_rsc->m_offset;
+}
+
+static inline
+void free_resource(hixo_resource_t *p_rsc, void *p_elemt)
+{
+    list_t *p_node = NULL;
+
+    if (NULL == p_elemt) {
+        goto ERR_INVALID_ELEMT;
+    }
+
+    p_node = (list_t *)(((uint8_t *)p_elemt) + p_rsc->m_offset);
+    if (!rm_node(&p_rsc->mp_inuse_list, p_node)) {
+        goto ERR_INVALID_ELEMT;
+    }
+    add_node(&p_rsc->mp_free_list, p_node);
+
+    return;
+
+ERR_INVALID_ELEMT:
+    fprintf(stderr, "[ERROR] invalid element\n");
+
+    return;
+}
+
+static inline
+void destroy_resource(hixo_resource_t *p_rsc)
 {
     if (NULL != p_rsc->mp_data) {
         free(p_rsc->mp_data);

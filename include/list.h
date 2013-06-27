@@ -38,8 +38,9 @@ void add_node(list_t **pp_list, list_t *p_node)
 }
 
 static inline
-void rm_node(list_t **pp_list, list_t *p_node)
+int rm_node(list_t **pp_list, list_t *p_node)
 {
+    int removed = FALSE;
     list_t **pp_curr = NULL;
 
     pp_curr = pp_list;
@@ -47,6 +48,7 @@ void rm_node(list_t **pp_list, list_t *p_node)
         if (p_node == *pp_curr) {
             *pp_curr = (list_t *)*p_node;
             *p_node = 0;
+            removed = TRUE;
 
             break;
         }
@@ -54,7 +56,7 @@ void rm_node(list_t **pp_list, list_t *p_node)
         pp_curr = (list_t **)*pp_curr;
     }
 
-    return;
+    return removed;
 }
 #if __cplusplus
 }

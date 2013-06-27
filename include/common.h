@@ -41,12 +41,12 @@ extern "C" {
 #define TRUE            (!FALSE)
 
 #define ARRAY_COUNT(a)      (sizeof(a) / sizeof(a[0]))
-#define OFFSET_OF(s, m)     ((intptr_t)&(((s *)0)->m ))
+#define OFFSET_OF(s, m)     ((size_t)&(((s *)0)->m ))
 #define CONTAINER_OF(ptr, type, member)     \
             ({\
-                const typeof(((type *)0)->member) *p_mptr = (ptr);\
+                const __typeof__(((type *)0)->member) *p_mptr = (ptr);\
                 (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
-            })
+             })
 
 #ifndef ESUCCESS
     #define ESUCCESS        (0)
