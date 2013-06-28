@@ -73,12 +73,13 @@ static int worker_main(void)
 static int hixo_main(void)
 {
     int rslt = 0;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
-    if (g_conf.m_daemon) {
+    if (p_conf->m_daemon) {
     }
 
     // 分裂进程
-    for (int i = 0; i < g_conf.m_worker_processes; ++i) {
+    for (int i = 0; i < p_conf->m_worker_processes; ++i) {
         pid_t cpid = fork();
         if (-1 == cpid) {
             return -1;

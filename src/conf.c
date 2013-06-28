@@ -31,8 +31,6 @@ static hixo_listen_conf_t const S_SRV_ADDRS[] = {
     {INADDR_ANY, 8890, 0},
 };
 
-hixo_conf_t g_conf = {};
-
 int create_conf(hixo_conf_t *p_conf)
 {
     p_conf->mppc_srv_addrs

@@ -36,7 +36,6 @@ typedef struct s_conf_t {
     int m_nservers;
 } hixo_conf_t;
 
-extern hixo_conf_t g_conf;
 extern int create_conf(hixo_conf_t *p_conf);
 extern void destroy_conf(hixo_conf_t *p_conf);
 #endif // __CONF_H__

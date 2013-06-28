@@ -42,15 +42,22 @@ static hixo_event_module_ctx_t s_epoll_module_ctx = {
 hixo_module_t g_epoll_module = {
     HIXO_MODULE_EVENT,
     &s_epoll_module_ctx,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
 };
 
 int epoll_init(void)
 {
     int rslt = 0;
     int tmp_err = 0;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
     #define epev_size sizeof(struct epoll_event)
-    s_epoll_module_ctx.mp_private = calloc(g_conf.m_max_events, epev_size);
+    s_epoll_module_ctx.mp_private = calloc(p_conf->m_max_events, epev_size);
     #undef epev_size
     if (NULL == s_epoll_module_ctx.mp_private) {
         fprintf(stderr, "[ERROR] out of memory\n");
@@ -59,7 +66,7 @@ int epoll_init(void)
     }
 
     errno = 0;
-    rslt = epoll_create(g_conf.m_max_connections);
+    rslt = epoll_create(p_conf->m_max_connections);
     tmp_err = (-1 == rslt) ? errno : 0;
     if (tmp_err) {
         fprintf(stderr, "[ERROR] epoll_create failed: %d\n", tmp_err);
@@ -68,7 +75,7 @@ int epoll_init(void)
     }
     s_epoll_module_ctx.m_fd = rslt;
 
-    for (int i = 0; i < g_conf.m_nservers; ++i) {
+    for (int i = 0; i < p_conf->m_nservers; ++i) {
     }
 
     return HIXO_OK;
@@ -99,13 +106,14 @@ int epoll_process_events(void)
     int tmp_err = 0;
     int timer = -1;
     struct epoll_event *p_epevs = NULL;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
     p_epevs = (struct epoll_event *)s_epoll_module_ctx.mp_private;
 
     errno = 0;
     nevents = epoll_wait(s_epoll_module_ctx.m_fd,
                          p_epevs,
-                         g_conf.m_max_events,
+                         p_conf->m_max_events,
                          timer);
     tmp_err = (-1 == nevents) ? errno : 0;
     if (tmp_err) {
