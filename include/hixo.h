@@ -15,6 +15,7 @@
 
 #include "list.h"
 #include "bitmap.h"
+#include "conf.h"
 
 
 #ifndef __HIXO_H__
@@ -128,6 +129,8 @@ typedef struct {
     void *mp_ctx;
     int (*mpf_init_master)(void);
     int (*mpf_init_worker)(void);
+    int (*mpf_init_thread)(void);
+    void(*mpf_exit_thread)(void);
     void (*mpf_exit_worker)(void);
     void (*mpf_exit_master)(void);
 } hixo_module_t;
@@ -139,14 +142,11 @@ struct s_socket_t {
 };
 
 typedef struct {
+    hixo_conf_t *mp_conf;
     hixo_socket_t *mp_listeners;
     hixo_resource_t m_sockets;
     hixo_resource_t m_events;
 } hixo_rt_context_t;
 
 extern hixo_rt_context_t g_rt_ctx;
-
-// modules
-extern hixo_module_t g_main_core_module;
-extern hixo_module_t g_epoll_module;
 #endif // __HIXO_H__

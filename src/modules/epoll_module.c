@@ -50,9 +50,9 @@ int epoll_init(void)
     int tmp_err = 0;
 
     #define epev_size sizeof(struct epoll_event)
-    s_epoll_module_ctx.mp_misc = calloc(g_conf.m_max_events, epev_size);
+    s_epoll_module_ctx.mp_private = calloc(g_conf.m_max_events, epev_size);
     #undef epev_size
-    if (NULL == s_epoll_module_ctx.mp_misc) {
+    if (NULL == s_epoll_module_ctx.mp_private) {
         fprintf(stderr, "[ERROR] out of memory\n");
 
         return HIXO_ERROR;
@@ -100,7 +100,7 @@ int epoll_process_events(void)
     int timer = -1;
     struct epoll_event *p_epevs = NULL;
 
-    p_epevs = (struct epoll_event *)s_epoll_module_ctx.mp_misc;
+    p_epevs = (struct epoll_event *)s_epoll_module_ctx.mp_private;
 
     errno = 0;
     nevents = epoll_wait(s_epoll_module_ctx.m_fd,
@@ -132,9 +132,9 @@ void epoll_exit(void)
 {
     (void)close(s_epoll_module_ctx.m_fd);
 
-    if (NULL != s_epoll_module_ctx.mp_misc) {
-        free(s_epoll_module_ctx.mp_misc);
-        s_epoll_module_ctx.mp_misc = NULL;
+    if (NULL != s_epoll_module_ctx.mp_private) {
+        free(s_epoll_module_ctx.mp_private);
+        s_epoll_module_ctx.mp_private = NULL;
     }
 
     return;

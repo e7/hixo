@@ -16,9 +16,13 @@
 #ifndef __CORE_MODULE_H__
 #define __CORE_MODULE_H__
 
-#include "common.h"
+#include "hixo.h"
 
 typedef struct {
-    int m_unused;
-} hixo_core_module_ctx_t; 
+    void *mp_private;
+} hixo_core_module_ctx_t;
+
+
+extern hixo_module_t g_main_core_module;
+extern hixo_module_t g_event_core_module;
 #endif // __CORE_MODULE_H__

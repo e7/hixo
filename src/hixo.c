@@ -14,6 +14,7 @@
 
 
 #include "conf.h"
+#include "core_module.h"
 #include "event_module.h"
 
 
@@ -25,6 +26,7 @@ hixo_rt_context_t g_rt_ctx = {};
 // 模块数组
 hixo_module_t *gap_modules[] = {
     &g_main_core_module,
+    &g_event_core_module,
     &g_epoll_module,
 };
 

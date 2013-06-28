@@ -18,7 +18,7 @@
 #include "core_module.h"
 
 
-static hixo_core_module_ctx_t s_core_module_ctx = {};
+static hixo_core_module_ctx_t s_main_core_ctx = {};
 
 static int main_core_init(void)
 {
@@ -155,8 +155,10 @@ static void main_core_exit(void)
 
 hixo_module_t g_main_core_module = {
     HIXO_MODULE_CORE,
-    &s_core_module_ctx,
+    &s_main_core_ctx,
     &main_core_init,
+    NULL,
+    NULL,
     NULL,
     NULL,
     &main_core_exit,

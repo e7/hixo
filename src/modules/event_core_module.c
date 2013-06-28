@@ -13,31 +13,30 @@
 // limitations under the License.
 
 
-#ifndef __EVENT_H__
-#define __EVENT_H__
-
-#include "hixo.h"
+#include "core_module.h"
 
 
-typedef struct s_event_t hixo_event_t;
-struct s_event_t {
-    void (*mpf_event_handler)(hixo_event_t *);
+static hixo_core_module_ctx_t s_event_core_ctx = {};
+
+
+static int event_core_init(void)
+{
+    fprintf(stderr, "i am event_core_module\n");
+    return HIXO_OK;
+}
+
+static void event_core_exit(void)
+{
+}
+
+
+hixo_module_t g_event_core_module = {
+    HIXO_MODULE_CORE,
+    &s_event_core_ctx,
+    &event_core_init,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    &event_core_exit,
 };
-
-typedef struct {
-    int (*mpf_init)(void);
-    void (*mpf_add_event)(hixo_event_t *, uint32_t, uint32_t);
-    int (*mpf_mod_event)(void);
-    int (*mpf_del_event)(void);
-    int (*mpf_process_events)(void);
-    void (*mpf_uninit)(void);
-
-    int m_fd;
-    list_t *mp_shut_read_list;
-    list_t *mp_shut_write_list;
-    void *mp_private;
-} hixo_event_module_ctx_t;
-
-
-extern hixo_module_t g_epoll_module;
-#endif // __EVENT_H__
