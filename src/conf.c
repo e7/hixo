@@ -25,14 +25,18 @@
 #define CONNECTION_TIME_OUT     60
 
 static hixo_listen_conf_t const S_SRV_ADDRS[] = {
-    {INADDR_ANY, 80,   0},
-    {INADDR_ANY, 8888, 0},
-    {INADDR_ANY, 8889, 0},
-    {INADDR_ANY, 8890, 0},
+    {INADDR_ANY, 8001,   0},
+    {INADDR_ANY, 8002, 0},
+    {INADDR_ANY, 8003, 0},
+    {INADDR_ANY, 8004, 0},
 };
 
 int create_conf(hixo_conf_t *p_conf)
 {
+    if (ARRAY_COUNT(S_SRV_ADDRS) > MIN(MAX_CONNECTIONS, MAX_EVENTS)) {
+        return HIXO_ERROR;
+    }
+
     p_conf->mppc_srv_addrs
         = (hixo_listen_conf_t const **)
         calloc(ARRAY_COUNT(S_SRV_ADDRS) + 1,

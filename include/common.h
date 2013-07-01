@@ -47,6 +47,7 @@ extern "C" {
                 const __typeof__(((type *)0)->member) *p_mptr = (ptr);\
                 (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
              })
+#define MIN(a, b)           (((a) > (b)) ? (b) : (a))
 
 #ifndef ESUCCESS
     #define ESUCCESS        (0)

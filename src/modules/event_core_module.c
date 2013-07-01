@@ -130,6 +130,8 @@ static int event_core_init(void)
         goto ERR_CREATE_SOCKETS;
     }
 
+    g_rt_ctx.mp_listeners = p_listeners; // 挂载到运行时上下文
+
     do {
         fprintf(stderr, "[INFO] count of listeners: %d\n", valid_sockets);
         rslt = HIXO_OK;

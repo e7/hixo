@@ -19,9 +19,10 @@
 #include "hixo.h"
 
 
-typedef struct s_event_t hixo_event_t;
 struct s_event_t {
     void (*mpf_event_handler)(hixo_event_t *);
+    list_t m_node;
+    void *mp_data;
 };
 
 typedef struct {
@@ -33,8 +34,6 @@ typedef struct {
     void (*mpf_uninit)(void);
 
     int m_fd;
-    list_t *mp_shut_read_list;
-    list_t *mp_shut_write_list;
     void *mp_private;
 } hixo_event_module_ctx_t;
 

@@ -27,6 +27,11 @@ typedef enum {
     HIXO_MODULE_EVENT,
 } hixo_module_type_t;
 
+
+typedef struct s_event_t hixo_event_t;
+typedef struct s_socket_t hixo_socket_t;
+
+
 // hixo_resource_t {{
 typedef struct {
     void *mp_data;
@@ -124,6 +129,11 @@ void destroy_resource(hixo_resource_t *p_rsc)
 // }} hixo_resource_t
 
 
+struct s_socket_t {
+    int m_fd;
+    list_t m_node;
+};
+
 typedef struct {
     hixo_module_type_t m_type;
     void *mp_ctx;
@@ -135,17 +145,11 @@ typedef struct {
     void (*mpf_exit_master)(void);
 } hixo_module_t;
 
-typedef struct s_socket_t hixo_socket_t;
-struct s_socket_t {
-    int m_fd;
-    list_t m_node;
-};
-
 typedef struct {
     hixo_conf_t *mp_conf;
     hixo_socket_t *mp_listeners;
-    hixo_resource_t m_sockets;
-    hixo_resource_t m_events;
+    hixo_resource_t *mp_sockets;
+    hixo_resource_t *mp_events;
 } hixo_rt_context_t;
 
 extern hixo_rt_context_t g_rt_ctx;
