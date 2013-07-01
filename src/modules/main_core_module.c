@@ -45,12 +45,13 @@ static void main_core_exit(void)
 
 hixo_module_t g_main_core_module = {
     HIXO_MODULE_CORE,
-    &s_main_core_ctx,
+    UNINITIALIZED,
     &main_core_init,
     NULL,
     NULL,
     NULL,
     NULL,
     &main_core_exit,
+    &s_main_core_ctx,
 };
 

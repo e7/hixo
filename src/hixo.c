@@ -41,31 +41,119 @@ static int master_main(void)
     return HIXO_OK;
 }
 
-static int worker_main(void)
+static int worker_loop(void)
 {
-    int rslt = 0;
-    hixo_event_module_ctx_t const *pc_ev_ctx = NULL;
+    int rslt = HIXO_ERROR;
+    int fatal_err = FALSE;
+    hixo_event_module_ctx_t *p_ev_ctx = NULL;
 
     for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+        p_ev_ctx = (hixo_event_module_ctx_t *)gap_modules[i]->mp_ctx;
+
         if (HIXO_MODULE_EVENT != gap_modules[i]->m_type) {
             continue;
         }
 
-        pc_ev_ctx = (hixo_event_module_ctx_t *)gap_modules[i]->mp_ctx;
-        rslt = (*pc_ev_ctx->mpf_init)();
-        if (-1 == rslt) {
+        if (NULL == p_ev_ctx->mpf_init) {
+            continue;
+        }
+
+        if (p_ev_ctx->m_initialized) {
+            continue;
+        }
+
+        if (HIXO_ERROR == (*p_ev_ctx->mpf_init)()) {
+            fatal_err = TRUE;
             break;
         }
+        p_ev_ctx->m_initialized = TRUE;
     }
-
+    if (fatal_err) {
+        goto ERR_INIT_CTX;
+    }
 
     while (TRUE) {
-        rslt = (*pc_ev_ctx->mpf_process_events)();
+        rslt = (*p_ev_ctx->mpf_process_events)();
 
         if (-1 == rslt) {
             break;
         }
     }
+
+    do {
+ERR_INIT_CTX:
+        for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+            p_ev_ctx = (hixo_event_module_ctx_t *)gap_modules[i]->mp_ctx;
+
+            if (HIXO_MODULE_EVENT != gap_modules[i]->m_type) {
+                continue;
+            }
+
+            if (NULL == p_ev_ctx->mpf_exit) {
+                continue;
+            }
+
+            if (!p_ev_ctx->m_initialized) {
+                continue;
+            }
+
+            (*p_ev_ctx->mpf_exit)();
+            p_ev_ctx->m_initialized = FALSE;
+        }
+    } while (0);
+
+    return rslt;
+}
+
+static int worker_main(void)
+{
+    int rslt = HIXO_ERROR;
+    int fatal_err = FALSE;
+
+    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+        if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+            continue;
+        }
+        
+        if (NULL == gap_modules[i]->mpf_init_worker) {
+            continue;
+        }
+
+        if (MASTER_INITIALIZED != gap_modules[i]->m_status) {
+            continue;
+        }
+
+        if (HIXO_ERROR == (*gap_modules[i]->mpf_init_worker)()) {
+            fatal_err = TRUE;
+            break;
+        }
+        gap_modules[i]->m_status = WORKER_INITIALIZED;
+    }
+    if (fatal_err) {
+        goto ERR_INIT_WORKER;
+    }
+
+    rslt = worker_loop();
+
+    do {
+ERR_INIT_WORKER:
+        for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+            if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+                continue;
+            }
+
+            if (NULL == gap_modules[i]->mpf_exit_worker) {
+                continue;
+            }
+
+            if (WORKER_INITIALIZED != gap_modules[i]->m_type) {
+                continue;
+            }
+
+            (*gap_modules[i]->mpf_exit_worker)();
+            gap_modules[i]->m_status = MASTER_INITIALIZED;
+        }
+    } while (0);
 
     return rslt;
 }
@@ -126,7 +214,7 @@ int main(int argc, char *argv[])
     int rslt = EXIT_FAILURE;
     int fatal_err = FALSE;
 
-    if (-1 == hixo_init_sysconf()) {
+    if (HIXO_ERROR == hixo_init_sysconf()) {
         goto ERR_INIT_SYSCONF;
     }
 
@@ -135,11 +223,20 @@ int main(int argc, char *argv[])
             continue;
         }
 
+        if (NULL == gap_modules[i]->mpf_init_master) {
+            continue;
+        }
+
+        if (UNINITIALIZED != gap_modules[i]->m_status) {
+            continue;
+        }
+
         if (HIXO_ERROR == (*gap_modules[i]->mpf_init_master)()) {
             fatal_err = TRUE;
 
             break;
         }
+        gap_modules[i]->m_status = MASTER_INITIALIZED;
     }
 
     if (fatal_err) {
@@ -148,17 +245,30 @@ int main(int argc, char *argv[])
 
     rslt = (HIXO_OK == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
 
+    do {
 ERR_INIT_MASTER:
-    if (g_master) {
-        for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
-            if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
-                continue;
+        if (g_master) {
+            for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+                if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+                    continue;
+                }
+
+                if (NULL == gap_modules[i]->mpf_exit_master) {
+                    continue;
+                }
+
+                if (MASTER_INITIALIZED != gap_modules[i]->m_status) {
+                    continue;
+                }
+                
+                (*gap_modules[i]->mpf_exit_master)();
+                gap_modules[i]->m_status = UNINITIALIZED;
             }
-            
-            (*gap_modules[i]->mpf_exit_master)();
         }
-    }
+
 ERR_INIT_SYSCONF:
+        break;
+    } while (0);
 
     return rslt;
 }

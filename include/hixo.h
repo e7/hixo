@@ -134,22 +134,29 @@ struct s_socket_t {
     list_t m_node;
 };
 
+typedef enum {
+    UNINITIALIZED = 0xE78F8A,
+    MASTER_INITIALIZED = UNINITIALIZED + 1,
+    WORKER_INITIALIZED = MASTER_INITIALIZED + 1,
+    THREAD_INITIALIZED = WORKER_INITIALIZED + 1,
+} hixo_module_status_t;
 typedef struct {
     hixo_module_type_t m_type;
-    void *mp_ctx;
+    hixo_module_status_t m_status;
     int (*mpf_init_master)(void);
     int (*mpf_init_worker)(void);
     int (*mpf_init_thread)(void);
     void(*mpf_exit_thread)(void);
     void (*mpf_exit_worker)(void);
     void (*mpf_exit_master)(void);
+    void *mp_ctx;
 } hixo_module_t;
 
 typedef struct {
     hixo_conf_t *mp_conf;
     hixo_socket_t *mp_listeners;
-    hixo_resource_t *mp_sockets;
-    hixo_resource_t *mp_events;
+    hixo_resource_t *mp_rs_sockets;
+    hixo_resource_t *mp_rs_events;
 } hixo_rt_context_t;
 
 extern hixo_rt_context_t g_rt_ctx;

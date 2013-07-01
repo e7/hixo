@@ -15,12 +15,20 @@
 
 #include "conf.h"
 #include "core_module.h"
+#include "event_module.h"
 
 
-static hixo_core_module_ctx_t s_event_core_ctx = {};
+static struct {
+    hixo_socket_t *mp_listeners;
+    hixo_resource_t m_sockets;
+    hixo_resource_t m_events;
+} s_event_core_private;
+static hixo_core_module_ctx_t s_event_core_ctx = {
+    &s_event_core_private,
+};
 
 
-static int event_core_init(void)
+static int event_core_init_master(void)
 {
     int rslt = HIXO_ERROR;
     int valid_sockets = 0;
@@ -29,13 +37,11 @@ static int event_core_init(void)
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     struct sockaddr_in srv_addr;
 
-    s_event_core_ctx.mp_private = calloc(p_conf->m_nservers,
-                                         sizeof(hixo_socket_t));
-    if (NULL == s_event_core_ctx.mp_private) {
+    p_listeners = (hixo_socket_t *)calloc(p_conf->m_nservers,
+                                          sizeof(hixo_socket_t));
+    if (NULL == p_listeners) {
         goto ERR_OUT_OF_MEM;
     }
-    p_listeners = (hixo_socket_t *)s_event_core_ctx.mp_private;
-
     for (int i = 0; i < p_conf->m_nservers; ++i) {
         errno = 0;
         p_listeners[i].m_fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -130,7 +136,8 @@ static int event_core_init(void)
         goto ERR_CREATE_SOCKETS;
     }
 
-    g_rt_ctx.mp_listeners = p_listeners; // 挂载到运行时上下文
+    s_event_core_private.mp_listeners = p_listeners;
+    g_rt_ctx.mp_listeners = p_listeners;
 
     do {
         fprintf(stderr, "[INFO] count of listeners: %d\n", valid_sockets);
@@ -149,7 +156,7 @@ ERR_OUT_OF_MEM:
     return rslt;
 }
 
-static void event_core_exit(void)
+static void event_core_exit_master(void)
 {
     hixo_conf_t *p_conf;
     hixo_socket_t *p_listeners;
@@ -176,14 +183,67 @@ static void event_core_exit(void)
     return;
 }
 
+static int event_core_init_worker(void)
+{
+    int rslt = HIXO_ERROR;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
+
+    // 创建套接字和事件资源
+    if (HIXO_ERROR == create_resource(&s_event_core_private.m_sockets,
+                                      p_conf->m_max_connections,
+                                      sizeof(hixo_socket_t),
+                                      OFFSET_OF(hixo_socket_t, m_node)))
+    {
+        fprintf(stderr, "[ERROR] create sockets cache failed\n");
+
+        goto ERR_SOCKETS_CACHE;
+    }
+    if (HIXO_ERROR == create_resource(&s_event_core_private.m_events,
+                                      p_conf->m_max_events,
+                                      sizeof(hixo_event_t),
+                                      OFFSET_OF(hixo_event_t, m_node)))
+    {
+        fprintf(stderr, "[ERROR] create events cache failed\n");
+
+        goto ERR_EVENTS_CACHE;
+    }
+
+    g_rt_ctx.mp_rs_sockets = &s_event_core_private.m_sockets;
+    g_rt_ctx.mp_rs_events = &s_event_core_private.m_events;
+
+    do {
+        rslt = HIXO_OK;
+        break;
+
+ERR_EVENTS_CACHE:
+        destroy_resource(&s_event_core_private.m_sockets);
+
+ERR_SOCKETS_CACHE:
+        break;
+    } while (0);
+
+    return rslt;
+}
+
+static void event_core_exit_worker(void)
+{
+    destroy_resource(&s_event_core_private.m_events);
+    g_rt_ctx.mp_rs_events = NULL;
+    destroy_resource(&s_event_core_private.m_sockets);
+    g_rt_ctx.mp_rs_sockets = NULL;
+
+    return;
+}
+
 
 hixo_module_t g_event_core_module = {
     HIXO_MODULE_CORE,
+    UNINITIALIZED,
+    &event_core_init_master,
+    &event_core_init_worker,
+    NULL,
+    NULL,
+    &event_core_exit_worker,
+    &event_core_exit_master,
     &s_event_core_ctx,
-    &event_core_init,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    &event_core_exit,
 };

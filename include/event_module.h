@@ -31,9 +31,9 @@ typedef struct {
     int (*mpf_mod_event)(void);
     int (*mpf_del_event)(void);
     int (*mpf_process_events)(void);
-    void (*mpf_uninit)(void);
+    void (*mpf_exit)(void);
 
-    int m_fd;
+    int m_initialized;
     void *mp_private;
 } hixo_event_module_ctx_t;
 

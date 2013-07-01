@@ -19,9 +19,11 @@
 
 
 struct {
-    hixo_resource_t m_sockets;
-    hixo_resource_t m_events;
-} s_epoll_private;
+    int m_epfd;
+    struct epoll_event *mp_epevs;
+} s_epoll_private = {
+    -1,
+};
 
 
 static int epoll_init(void);
@@ -40,19 +42,20 @@ static hixo_event_module_ctx_t s_epoll_module_ctx = {
     &epoll_del_event,
     &epoll_process_events,
     &epoll_exit,
-    -1,
-    NULL,
+    FALSE,
+    &s_epoll_private,
 };
 
 hixo_module_t g_epoll_module = {
     HIXO_MODULE_EVENT,
+    UNINITIALIZED,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
     &s_epoll_module_ctx,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
 };
 
 int epoll_init(void)
@@ -67,40 +70,25 @@ int epoll_init(void)
     tmp_err = (-1 == ret) ? errno : 0;
     if (tmp_err) {
         fprintf(stderr, "[ERROR] epoll_create failed: %d\n", tmp_err);
+        s_epoll_private.m_epfd = -1;
 
         goto ERR_EPOLL_CREATE;
     }
-    s_epoll_module_ctx.m_fd = ret;
+    s_epoll_private.m_epfd = ret;
 
-    // 创建套接字和事件资源
-    if (HIXO_ERROR == create_resource(&s_epoll_private.m_sockets,
-                                      p_conf->m_max_connections,
-                                      sizeof(hixo_socket_t),
-                                      OFFSET_OF(hixo_socket_t, m_node)))
-    {
-        fprintf(stderr, "[ERROR] create sockets failed\n");
-
-        goto ERR_CREATE_SOCKETS;
+    s_epoll_private.mp_epevs
+        = (struct epoll_event *)calloc(p_conf->m_max_events,
+                                       sizeof(struct epoll_event));
+    if (NULL == s_epoll_private.mp_epevs) {
+        goto ERR_EPOLL_EVENTS;
     }
-    if (HIXO_ERROR == create_resource(&s_epoll_private.m_events,
-                                      p_conf->m_max_events,
-                                      sizeof(hixo_event_t),
-                                      OFFSET_OF(hixo_event_t, m_node)))
-    {
-        fprintf(stderr, "[ERROR] create sockets failed\n");
-
-        goto ERR_CREATE_EVENTS;
-    }
-    s_epoll_module_ctx.mp_private = &s_epoll_private;
-    g_rt_ctx.mp_sockets = &s_epoll_private.m_sockets;
-    g_rt_ctx.mp_events = &s_epoll_private.m_events;
 
     // 添加监听器事件监视
     for (int i = 0; i < p_conf->m_nservers; ++i) {
         hixo_event_t *p_ev = NULL;
         hixo_socket_t *p_sock = NULL;
 
-        p_ev = (hixo_event_t *)alloc_resource(&s_epoll_private.m_events);
+        p_ev = (hixo_event_t *)alloc_resource(g_rt_ctx.mp_rs_events);
         p_sock = &g_rt_ctx.mp_listeners[i];
         assert(NULL != p_ev);
         assert(NULL != p_sock);
@@ -110,15 +98,8 @@ int epoll_init(void)
     }
 
     do {
-        rslt = HIXO_OK;
-        break;
-
-ERR_CREATE_EVENTS:
-        destroy_resource(&s_epoll_private.m_sockets);
-
-ERR_CREATE_SOCKETS:
-        (void)close(s_epoll_module_ctx.m_fd);
-        s_epoll_module_ctx.m_fd = -1;
+ERR_EPOLL_EVENTS:
+        (void)close(s_epoll_private.m_epfd);
 
 ERR_EPOLL_CREATE:
         break;
@@ -138,7 +119,7 @@ void epoll_add_event(hixo_event_t *p_ev,
     epev.events = events;
     epev.data.ptr = p_ev;
     errno = 0;
-    (void)epoll_ctl(s_epoll_module_ctx.m_fd,
+    (void)epoll_ctl(s_epoll_private.m_epfd,
                     EPOLL_CTL_ADD,
                     p_sock->m_fd,
                     &epev);
@@ -174,7 +155,7 @@ int epoll_process_events(void)
     p_epevs = (struct epoll_event *)s_epoll_module_ctx.mp_private;
 
     errno = 0;
-    nevents = epoll_wait(s_epoll_module_ctx.m_fd,
+    nevents = epoll_wait(s_epoll_private.m_epfd,
                          p_epevs,
                          p_conf->m_max_events,
                          timer);
@@ -201,7 +182,7 @@ int epoll_process_events(void)
 
 void epoll_exit(void)
 {
-    (void)close(s_epoll_module_ctx.m_fd);
+    (void)close(s_epoll_private.m_epfd);
 
     if (NULL != s_epoll_module_ctx.mp_private) {
         free(s_epoll_module_ctx.mp_private);
