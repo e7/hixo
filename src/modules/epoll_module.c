@@ -23,6 +23,7 @@ struct {
     struct epoll_event *mp_epevs;
 } s_epoll_private = {
     -1,
+    NULL,
 };
 
 
@@ -98,6 +99,9 @@ int epoll_init(void)
     }
 
     do {
+        rslt = HIXO_OK;
+        break;
+
 ERR_EPOLL_EVENTS:
         (void)close(s_epoll_private.m_epfd);
 
@@ -116,7 +120,7 @@ void epoll_add_event(hixo_event_t *p_ev,
     struct epoll_event epev;
     hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
-    epev.events = events;
+    epev.events = events | flags;
     epev.data.ptr = p_ev;
     errno = 0;
     (void)epoll_ctl(s_epoll_private.m_epfd,
@@ -149,14 +153,12 @@ int epoll_process_events(void)
     int nevents = 0;
     int tmp_err = 0;
     int timer = -1;
-    struct epoll_event *p_epevs = NULL;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
-    p_epevs = (struct epoll_event *)s_epoll_module_ctx.mp_private;
 
     errno = 0;
     nevents = epoll_wait(s_epoll_private.m_epfd,
-                         p_epevs,
+                         s_epoll_private.mp_epevs,
                          p_conf->m_max_events,
                          timer);
     tmp_err = (-1 == nevents) ? errno : 0;
@@ -170,6 +172,7 @@ int epoll_process_events(void)
         }
     }
 
+    fprintf(stderr, "[INFO] connection input\n");
     if (0 == nevents) { // timeout
         return HIXO_OK;
     }

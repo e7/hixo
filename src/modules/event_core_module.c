@@ -145,8 +145,9 @@ static int event_core_init_master(void)
         break;
 
 ERR_CREATE_SOCKETS:
-        free(s_event_core_ctx.mp_private);
-        s_event_core_ctx.mp_private = NULL;
+        free(p_listeners);
+        s_event_core_private.mp_listeners = NULL;
+        g_rt_ctx.mp_listeners = NULL;
 
 ERR_OUT_OF_MEM:
         fprintf(stderr, "[ERROR] create sockets failed: %d\n", tmp_err);

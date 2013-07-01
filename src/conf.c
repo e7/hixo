@@ -25,7 +25,7 @@
 #define CONNECTION_TIME_OUT     60
 
 static hixo_listen_conf_t const S_SRV_ADDRS[] = {
-    {INADDR_ANY, 8001,   0},
+    {INADDR_ANY, 8001, 0},
     {INADDR_ANY, 8002, 0},
     {INADDR_ANY, 8003, 0},
     {INADDR_ANY, 8004, 0},
