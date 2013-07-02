@@ -114,7 +114,7 @@ static int worker_main(void)
         if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
             continue;
         }
-        
+
         if (NULL == gap_modules[i]->mpf_init_worker) {
             continue;
         }
@@ -146,7 +146,7 @@ ERR_INIT_WORKER:
                 continue;
             }
 
-            if (WORKER_INITIALIZED != gap_modules[i]->m_type) {
+            if (WORKER_INITIALIZED != gap_modules[i]->m_status) {
                 continue;
             }
 
@@ -260,7 +260,7 @@ ERR_INIT_MASTER:
                 if (MASTER_INITIALIZED != gap_modules[i]->m_status) {
                     continue;
                 }
-                
+
                 (*gap_modules[i]->mpf_exit_master)();
                 gap_modules[i]->m_status = UNINITIALIZED;
             }

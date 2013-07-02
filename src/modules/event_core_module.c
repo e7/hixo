@@ -266,7 +266,7 @@ ERR_EVENTS_CACHE:
         destroy_resource(&s_event_core_private.m_sockets);
 
 ERR_SOCKETS_CACHE:
-        (void)shmdt(s_event_core_private.mp_accept_lock);
+        (void)shmdt((const void *)s_event_core_private.mp_accept_lock);
         s_event_core_private.mp_accept_lock = NULL;
 
 ERR_SHMAT:
@@ -282,8 +282,8 @@ static void event_core_exit_worker(void)
     g_rt_ctx.mp_rs_events = NULL;
     destroy_resource(&s_event_core_private.m_sockets);
     g_rt_ctx.mp_rs_sockets = NULL;
-    
-    (void)shmdt(s_event_core_private.mp_accept_lock);
+
+    (void)shmdt((void const *)s_event_core_private.mp_accept_lock);
     s_event_core_private.mp_accept_lock = NULL;
     g_rt_ctx.mp_accept_lock = NULL;
 
