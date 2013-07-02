@@ -21,9 +21,11 @@
 struct {
     int m_epfd;
     struct epoll_event *mp_epevs;
+    int m_hold_lock;
 } s_epoll_private = {
     -1,
     NULL,
+    FALSE,
 };
 
 
@@ -32,7 +34,9 @@ static void epoll_add_event(hixo_event_t *p_ev,
                             uint32_t events,
                             uint32_t flags);
 static int epoll_mod_event(void);
-static int epoll_del_event(void);
+static void epoll_del_event(hixo_event_t *p_ev,
+                            uint32_t events,
+                            uint32_t flags);
 static int epoll_process_events(void);
 static void epoll_exit(void);
 
@@ -84,20 +88,6 @@ int epoll_init(void)
         goto ERR_EPOLL_EVENTS;
     }
 
-    // 添加监听器事件监视
-    for (int i = 0; i < p_conf->m_nservers; ++i) {
-        hixo_event_t *p_ev = NULL;
-        hixo_socket_t *p_sock = NULL;
-
-        p_ev = (hixo_event_t *)alloc_resource(g_rt_ctx.mp_rs_events);
-        p_sock = &g_rt_ctx.mp_listeners[i];
-        assert(NULL != p_ev);
-        assert(NULL != p_sock);
-        p_ev->mp_data = p_sock;
-
-        epoll_add_event(p_ev, EPOLLIN, EPOLLET);
-    }
-
     do {
         rslt = HIXO_OK;
         break;
@@ -143,9 +133,30 @@ int epoll_mod_event(void)
     return HIXO_OK;
 }
 
-int epoll_del_event(void)
+void epoll_del_event(hixo_event_t *p_ev,
+                     uint32_t events,
+                     uint32_t flags)
 {
-    return HIXO_OK;
+    int tmp_err = 0;
+    struct epoll_event epev;
+    hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
+
+    epev.events = events | flags;
+    epev.data.ptr = p_ev;
+    errno = 0;
+    (void)epoll_ctl(s_epoll_private.m_epfd,
+                    EPOLL_CTL_DEL,
+                    p_sock->m_fd,
+                    &epev);
+    tmp_err = errno;
+    if (tmp_err) {
+        fprintf(stderr,
+                "[WARNING][%d] del event failed: %d\n",
+                getpid(),
+                tmp_err);
+    }
+
+    return;
 }
 
 int epoll_process_events(void)
@@ -155,6 +166,29 @@ int epoll_process_events(void)
     int timer = -1;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
+    // 监听器事件监视
+    if (spinlock_try(g_rt_ctx.mp_accept_lock)) {
+        s_epoll_private.m_hold_lock = TRUE;
+    } else {
+        s_epoll_private.m_hold_lock = FALSE;
+    }
+    if (s_epoll_private.m_hold_lock) {
+        for (int i = 0; i < p_conf->m_nservers; ++i) {
+            hixo_event_t *p_ev = &g_rt_ctx.mp_listeners_evs[i];
+            hixo_socket_t *p_sock = &g_rt_ctx.mp_listeners[i];
+
+            p_ev->mp_data = p_sock;
+            epoll_add_event(p_ev, EPOLLIN, EPOLLET);
+        }
+    } else {
+        for (int i = 0; i < p_conf->m_nservers; ++i) {
+            hixo_event_t *p_ev = &g_rt_ctx.mp_listeners_evs[i];
+            hixo_socket_t *p_sock = &g_rt_ctx.mp_listeners[i];
+
+            p_ev->mp_data = p_sock;
+            epoll_del_event(p_ev, EPOLLIN, EPOLLET);
+        }
+    }
 
     errno = 0;
     nevents = epoll_wait(s_epoll_private.m_epfd,
@@ -172,7 +206,11 @@ int epoll_process_events(void)
         }
     }
 
-    fprintf(stderr, "[INFO] connection input\n");
+    if (s_epoll_private.m_hold_lock) {
+        (void)spinlock_unlock(g_rt_ctx.mp_accept_lock);
+        s_epoll_private.m_hold_lock = FALSE;
+    }
+
     if (0 == nevents) { // timeout
         return HIXO_OK;
     }

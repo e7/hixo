@@ -16,6 +16,7 @@
 #include "list.h"
 #include "bitmap.h"
 #include "conf.h"
+#include "spinlock.h"
 
 
 #ifndef __HIXO_H__
@@ -154,7 +155,9 @@ typedef struct {
 
 typedef struct {
     hixo_conf_t *mp_conf;
+    atomic_t *mp_accept_lock;
     hixo_socket_t *mp_listeners;
+    hixo_event_t *mp_listeners_evs;
     hixo_resource_t *mp_rs_sockets;
     hixo_resource_t *mp_rs_events;
 } hixo_rt_context_t;

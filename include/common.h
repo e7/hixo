@@ -23,6 +23,7 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <sys/shm.h>
 #include <arpa/inet.h>
 #include <errno.h>
 
@@ -35,6 +36,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+
+typedef volatile uintptr_t atomic_t;
 
 
 #define FALSE           0

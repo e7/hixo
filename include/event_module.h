@@ -29,7 +29,7 @@ typedef struct {
     int (*mpf_init)(void);
     void (*mpf_add_event)(hixo_event_t *, uint32_t, uint32_t);
     int (*mpf_mod_event)(void);
-    int (*mpf_del_event)(void);
+    void (*mpf_del_event)(hixo_event_t *, uint32_t, uint32_t);
     int (*mpf_process_events)(void);
     void (*mpf_exit)(void);
 

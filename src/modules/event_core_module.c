@@ -19,10 +19,16 @@
 
 
 static struct {
+    int m_shmid;
+    atomic_t *mp_accept_lock;
     hixo_socket_t *mp_listeners;
+    hixo_event_t *mp_listeners_evs;
     hixo_resource_t m_sockets;
     hixo_resource_t m_events;
-} s_event_core_private;
+} s_event_core_private = {
+    -1,
+};
+
 static hixo_core_module_ctx_t s_event_core_ctx = {
     &s_event_core_private,
 };
@@ -34,14 +40,31 @@ static int event_core_init_master(void)
     int valid_sockets = 0;
     int tmp_err = 0;
     hixo_socket_t *p_listeners = NULL;
+    hixo_event_t *p_listeners_evs = NULL;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     struct sockaddr_in srv_addr;
+
+    errno = 0;
+    s_event_core_private.m_shmid = shmget(IPC_PRIVATE, 4096, IPC_CREAT | 0600);
+    tmp_err = errno;
+    if (-1 == s_event_core_private.m_shmid) {
+        goto ERR_SHMGET;
+    }
+
+    p_listeners_evs = (hixo_event_t *)calloc(p_conf->m_nservers,
+                                             sizeof(hixo_socket_t));
+    if (NULL == p_listeners_evs) {
+        goto ERR_CREATE_LISTENERS_EVS;
+    }
+    s_event_core_private.mp_listeners_evs = p_listeners_evs;
+    g_rt_ctx.mp_listeners_evs = p_listeners_evs;
 
     p_listeners = (hixo_socket_t *)calloc(p_conf->m_nservers,
                                           sizeof(hixo_socket_t));
     if (NULL == p_listeners) {
-        goto ERR_OUT_OF_MEM;
+        goto ERR_CREATE_LISTENERS;
     }
+
     for (int i = 0; i < p_conf->m_nservers; ++i) {
         errno = 0;
         p_listeners[i].m_fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -149,8 +172,17 @@ ERR_CREATE_SOCKETS:
         s_event_core_private.mp_listeners = NULL;
         g_rt_ctx.mp_listeners = NULL;
 
-ERR_OUT_OF_MEM:
+ERR_CREATE_LISTENERS:
+        free(p_listeners_evs);
+        s_event_core_private.mp_listeners_evs = NULL;
+        g_rt_ctx.mp_listeners_evs = NULL;
+
+ERR_CREATE_LISTENERS_EVS:
+        (void)shmctl(s_event_core_private.m_shmid, IPC_RMID, 0);
         fprintf(stderr, "[ERROR] create sockets failed: %d\n", tmp_err);
+
+ERR_SHMGET:
+        fprintf(stderr, "[ERROR] shmget() failed: %d\n", tmp_err);
         break;
     } while (0);
 
@@ -168,6 +200,9 @@ static void event_core_exit_master(void)
     if (NULL == s_event_core_ctx.mp_private) {
         return;
     }
+
+    (void)shmctl(s_event_core_private.m_shmid, IPC_RMID, 0);
+    s_event_core_private.m_shmid = -1;
 
     p_conf = g_rt_ctx.mp_conf;
     p_listeners = (hixo_socket_t *)s_event_core_ctx.mp_private;
@@ -187,7 +222,20 @@ static void event_core_exit_master(void)
 static int event_core_init_worker(void)
 {
     int rslt = HIXO_ERROR;
+    int tmp_err = 0;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
+
+    // 映射共享内存
+    assert(-1 != s_event_core_private.m_shmid);
+    errno = 0;
+    s_event_core_private.mp_accept_lock
+        = (atomic_t *)shmat(s_event_core_private.m_shmid, 0, 0);
+    tmp_err = errno;
+    if ((atomic_t *)-1 == s_event_core_private.mp_accept_lock) {
+        fprintf(stderr, "[ERROR] shmat() failed: %d\n", tmp_err);
+        goto ERR_SHMAT;
+    }
+    g_rt_ctx.mp_accept_lock = s_event_core_private.mp_accept_lock;
 
     // 创建套接字和事件资源
     if (HIXO_ERROR == create_resource(&s_event_core_private.m_sockets,
@@ -196,7 +244,6 @@ static int event_core_init_worker(void)
                                       OFFSET_OF(hixo_socket_t, m_node)))
     {
         fprintf(stderr, "[ERROR] create sockets cache failed\n");
-
         goto ERR_SOCKETS_CACHE;
     }
     if (HIXO_ERROR == create_resource(&s_event_core_private.m_events,
@@ -205,7 +252,6 @@ static int event_core_init_worker(void)
                                       OFFSET_OF(hixo_event_t, m_node)))
     {
         fprintf(stderr, "[ERROR] create events cache failed\n");
-
         goto ERR_EVENTS_CACHE;
     }
 
@@ -220,6 +266,10 @@ ERR_EVENTS_CACHE:
         destroy_resource(&s_event_core_private.m_sockets);
 
 ERR_SOCKETS_CACHE:
+        (void)shmdt(s_event_core_private.mp_accept_lock);
+        s_event_core_private.mp_accept_lock = NULL;
+
+ERR_SHMAT:
         break;
     } while (0);
 
@@ -232,6 +282,10 @@ static void event_core_exit_worker(void)
     g_rt_ctx.mp_rs_events = NULL;
     destroy_resource(&s_event_core_private.m_sockets);
     g_rt_ctx.mp_rs_sockets = NULL;
+    
+    (void)shmdt(s_event_core_private.mp_accept_lock);
+    s_event_core_private.mp_accept_lock = NULL;
+    g_rt_ctx.mp_accept_lock = NULL;
 
     return;
 }
