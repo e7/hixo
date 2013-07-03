@@ -35,11 +35,11 @@ int atomic_cmp_set(atomic_t *lock, uint32_t old, uint32_t set)
                           : "m" (*lock), "a" (old), "r" (set)
                           : "cc", "memory");
 
-    return !!rslt;
+    return rslt;
 }
 
 #define spinlock_try(lock) atomic_cmp_set(lock, 0, 1)
-#define spinlock_unlock(lock) atomic_cmp_set(lock,1 ,0)
+#define spinlock_unlock(lock) (*lock = 0)
 
 #if __cplusplus
 }

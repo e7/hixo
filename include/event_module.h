@@ -23,6 +23,7 @@ struct s_event_t {
     void (*mpf_event_handler)(hixo_event_t *);
     list_t m_node;
     void *mp_data;
+    int m_active;
 };
 
 typedef struct {

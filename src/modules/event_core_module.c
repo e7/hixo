@@ -52,7 +52,7 @@ static int event_core_init_master(void)
     }
 
     p_listeners_evs = (hixo_event_t *)calloc(p_conf->m_nservers,
-                                             sizeof(hixo_socket_t));
+                                             sizeof(hixo_event_t));
     if (NULL == p_listeners_evs) {
         goto ERR_CREATE_LISTENERS_EVS;
     }
@@ -161,6 +161,10 @@ static int event_core_init_master(void)
 
     s_event_core_private.mp_listeners = p_listeners;
     g_rt_ctx.mp_listeners = p_listeners;
+
+    for (int i = 0; i < p_conf->m_nservers; ++i) {
+        p_listeners_evs[i].mp_data = &p_listeners[i];
+    }
 
     do {
         fprintf(stderr, "[INFO] count of listeners: %d\n", valid_sockets);

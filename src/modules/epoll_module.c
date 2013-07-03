@@ -110,6 +110,10 @@ void epoll_add_event(hixo_event_t *p_ev,
     struct epoll_event epev;
     hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
+    if (p_ev->m_active) {
+        return;
+    }
+
     epev.events = events | flags;
     epev.data.ptr = p_ev;
     errno = 0;
@@ -120,9 +124,12 @@ void epoll_add_event(hixo_event_t *p_ev,
     tmp_err = errno;
     if (tmp_err) {
         fprintf(stderr,
-                "[WARNING][%d] add event failed: %d\n",
+                "[WARNING][%d] add event %d failed: %d\n",
                 getpid(),
+                p_sock->m_fd,
                 tmp_err);
+    } else {
+        p_ev->m_active = TRUE;
     }
 
     return;
@@ -141,6 +148,10 @@ void epoll_del_event(hixo_event_t *p_ev,
     struct epoll_event epev;
     hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
+    if (!p_ev->m_active) {
+        return;
+    }
+
     epev.events = events | flags;
     epev.data.ptr = p_ev;
     errno = 0;
@@ -154,6 +165,8 @@ void epoll_del_event(hixo_event_t *p_ev,
                 "[WARNING][%d] del event failed: %d\n",
                 getpid(),
                 tmp_err);
+    } else {
+        p_ev->m_active = FALSE;
     }
 
     return;
@@ -163,29 +176,25 @@ int epoll_process_events(void)
 {
     int nevents = 0;
     int tmp_err = 0;
-    int timer = -1;
+    int timer = 20;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
-    // 监听器事件监视
     if (spinlock_try(g_rt_ctx.mp_accept_lock)) {
         s_epoll_private.m_hold_lock = TRUE;
     } else {
         s_epoll_private.m_hold_lock = FALSE;
     }
+
     if (s_epoll_private.m_hold_lock) {
         for (int i = 0; i < p_conf->m_nservers; ++i) {
             hixo_event_t *p_ev = &g_rt_ctx.mp_listeners_evs[i];
-            hixo_socket_t *p_sock = &g_rt_ctx.mp_listeners[i];
 
-            p_ev->mp_data = p_sock;
             epoll_add_event(p_ev, EPOLLIN, EPOLLET);
         }
     } else {
         for (int i = 0; i < p_conf->m_nservers; ++i) {
             hixo_event_t *p_ev = &g_rt_ctx.mp_listeners_evs[i];
-            hixo_socket_t *p_sock = &g_rt_ctx.mp_listeners[i];
 
-            p_ev->mp_data = p_sock;
             epoll_del_event(p_ev, EPOLLIN, EPOLLET);
         }
     }
