@@ -27,7 +27,7 @@ typedef struct {
 int main(int argc, char *argv[])
 {
 #define DATA_COUNT      4
-    list_t *p_node = NULL;
+    list_t *p_ints = NULL;
     hixo_resource_t int_rsc = {};
 
     if (HIXO_ERROR == create_resource(&int_rsc,
@@ -39,37 +39,20 @@ int main(int argc, char *argv[])
     }
     for (int i = 0; i < DATA_COUNT; ++i) {
         integer_t *p_integer = alloc_resource(&int_rsc);
-        
+
         p_integer->x = i;
+        add_node(&p_ints, &p_integer->m_node);
     }
+
     assert(NULL == int_rsc.mp_free_list);
-    p_node = int_rsc.mp_inuse_list;
-    for ( ; ; ) {
-        integer_t *p_integer = NULL;
 
-        if (NULL == p_node) {
-            break;
-        }
+    while (NULL != p_ints) {
+        integer_t *p_data = CONTAINER_OF(p_ints, integer_t, m_node);
 
-        p_integer = CONTAINER_OF(p_node, integer_t, m_node);
-        fprintf(stderr, "%d\n", p_integer->x);
-        p_node = *(list_t **)p_node;
-        free_resource(&int_rsc, p_integer);
-    }
-    assert(NULL == int_rsc.mp_inuse_list);
-    p_node = int_rsc.mp_free_list;
-    for ( ; ; ) {
-        integer_t *p_integer = NULL;
-
-        if (NULL == p_node) {
-            break;
-        }
-
-        p_integer = CONTAINER_OF(p_node, integer_t, m_node);
-        fprintf(stderr, "%d\n", p_integer->x);
-        p_node = *(list_t **)p_node;
+        fprintf(stderr, "%d\n", p_data->x);
+        p_ints = *(list_t **)p_ints;
     }
     destroy_resource(&int_rsc);
-                                      
+
     return EXIT_SUCCESS;
 }

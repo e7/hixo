@@ -35,9 +35,9 @@ typedef struct s_socket_t hixo_socket_t;
 
 // hixo_resource_t {{
 typedef struct {
-    void *mp_data;
+    void *mp_start;
+    void *mp_end;
     size_t m_offset; // offset of list node
-    list_t *mp_inuse_list;
     list_t *mp_free_list;
 } hixo_resource_t;
 
@@ -53,24 +53,24 @@ int create_resource(hixo_resource_t *p_rsc,
         return HIXO_ERROR;
     }
 
-    if (NULL != p_rsc->mp_data) {
+    if (NULL != p_rsc->mp_start) {
         fprintf(stderr, "[ERROR] resource exists\n");
 
         return HIXO_ERROR;
     }
 
     // start
-    p_rsc->mp_data = calloc(count, elemt_size);
-    if (NULL == p_rsc->mp_data) {
+    p_rsc->mp_start = calloc(count, elemt_size);
+    if (NULL == p_rsc->mp_start) {
         fprintf(stderr, "[ERROR} out of memory\n");
 
         return HIXO_ERROR;
     }
+    p_rsc->mp_end = ((uint8_t *)p_rsc->mp_start) + count * elemt_size;
     p_rsc->m_offset = offset;
-    p_rsc->mp_inuse_list = NULL;
     p_rsc->mp_free_list = NULL;
     for (int i = 0; i < count; ++i) {
-        p_node = (list_t *)(((uint8_t *)p_rsc->mp_data)
+        p_node = (list_t *)(((uint8_t *)p_rsc->mp_start)
                                 + i * elemt_size
                                 + offset);
         add_node(&p_rsc->mp_free_list, p_node);
@@ -89,7 +89,6 @@ void *alloc_resource(hixo_resource_t *p_rsc)
     }
     p_node = p_rsc->mp_free_list;
     assert(rm_node(&p_rsc->mp_free_list, p_node));
-    add_node(&p_rsc->mp_inuse_list, p_node);
 
     return ((uint8_t *)p_node) - p_rsc->m_offset;
 }
@@ -102,11 +101,11 @@ void free_resource(hixo_resource_t *p_rsc, void *p_elemt)
     if (NULL == p_elemt) {
         goto ERR_INVALID_ELEMT;
     }
-
-    p_node = (list_t *)(((uint8_t *)p_elemt) + p_rsc->m_offset);
-    if (!rm_node(&p_rsc->mp_inuse_list, p_node)) {
+    if ((p_elemt < p_rsc->mp_start) || (p_elemt >= p_rsc->mp_end)) {
         goto ERR_INVALID_ELEMT;
     }
+
+    p_node = (list_t *)(((uint8_t *)p_elemt) + p_rsc->m_offset);
     add_node(&p_rsc->mp_free_list, p_node);
 
     return;
@@ -120,11 +119,11 @@ ERR_INVALID_ELEMT:
 static inline
 void destroy_resource(hixo_resource_t *p_rsc)
 {
-    if (NULL != p_rsc->mp_data) {
-        free(p_rsc->mp_data);
-        p_rsc->mp_data = NULL;
+    if (NULL != p_rsc->mp_start) {
+        free(p_rsc->mp_start);
+        p_rsc->mp_start = NULL;
     }
-    p_rsc->mp_inuse_list = NULL;
+    p_rsc->mp_end = NULL;
     p_rsc->mp_free_list = NULL;
 }
 // }} hixo_resource_t
@@ -156,10 +155,10 @@ typedef struct {
 typedef struct {
     hixo_conf_t *mp_conf;
     atomic_t *mp_accept_lock;
-    hixo_socket_t *mp_listeners;
-    hixo_event_t *mp_listeners_evs;
-    hixo_resource_t *mp_rs_sockets;
-    hixo_resource_t *mp_rs_events;
+    list_t *mp_listeners;
+    list_t *mp_listeners_evs;
+    hixo_resource_t m_sockets_cache;
+    hixo_resource_t m_events_cache;
 } hixo_rt_context_t;
 
 extern hixo_rt_context_t g_rt_ctx;

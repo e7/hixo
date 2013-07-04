@@ -247,23 +247,21 @@ int main(int argc, char *argv[])
 
     do {
 ERR_INIT_MASTER:
-        if (g_master) {
-            for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
-                if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
-                    continue;
-                }
-
-                if (NULL == gap_modules[i]->mpf_exit_master) {
-                    continue;
-                }
-
-                if (MASTER_INITIALIZED != gap_modules[i]->m_status) {
-                    continue;
-                }
-
-                (*gap_modules[i]->mpf_exit_master)();
-                gap_modules[i]->m_status = UNINITIALIZED;
+        for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+            if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+                continue;
             }
+
+            if (NULL == gap_modules[i]->mpf_exit_master) {
+                continue;
+            }
+
+            if (MASTER_INITIALIZED != gap_modules[i]->m_status) {
+                continue;
+            }
+
+            (*gap_modules[i]->mpf_exit_master)();
+            gap_modules[i]->m_status = UNINITIALIZED;
         }
 
 ERR_INIT_SYSCONF:

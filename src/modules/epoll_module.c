@@ -186,17 +186,7 @@ int epoll_process_events(void)
     }
 
     if (s_epoll_private.m_hold_lock) {
-        for (int i = 0; i < p_conf->m_nservers; ++i) {
-            hixo_event_t *p_ev = &g_rt_ctx.mp_listeners_evs[i];
-
-            epoll_add_event(p_ev, EPOLLIN, EPOLLET);
-        }
     } else {
-        for (int i = 0; i < p_conf->m_nservers; ++i) {
-            hixo_event_t *p_ev = &g_rt_ctx.mp_listeners_evs[i];
-
-            epoll_del_event(p_ev, EPOLLIN, EPOLLET);
-        }
     }
 
     errno = 0;
