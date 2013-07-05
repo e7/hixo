@@ -20,7 +20,7 @@
 
 
 struct s_event_t {
-    void (*mpf_event_handler)(hixo_event_t *);
+    void (*mpf_event_handler)(hixo_socket_t *);
     list_t m_node;
     void *mp_data;
     int m_active;
@@ -31,12 +31,15 @@ typedef struct {
     void (*mpf_add_event)(hixo_event_t *, uint32_t, uint32_t);
     int (*mpf_mod_event)(void);
     void (*mpf_del_event)(hixo_event_t *, uint32_t, uint32_t);
-    int (*mpf_process_events)(void);
+    int (*mpf_process_events)(int);
     void (*mpf_exit)(void);
 
     int m_initialized;
     void *mp_private;
 } hixo_event_module_ctx_t;
+
+
+extern void hixo_accept_handler(void);
 
 
 extern hixo_module_t g_epoll_module;

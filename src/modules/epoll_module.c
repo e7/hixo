@@ -37,7 +37,7 @@ static int epoll_mod_event(void);
 static void epoll_del_event(hixo_event_t *p_ev,
                             uint32_t events,
                             uint32_t flags);
-static int epoll_process_events(void);
+static int epoll_process_events(int timer);
 static void epoll_exit(void);
 
 static hixo_event_module_ctx_t s_epoll_module_ctx = {
@@ -110,10 +110,6 @@ void epoll_add_event(hixo_event_t *p_ev,
     struct epoll_event epev;
     hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
-    if (p_ev->m_active) {
-        return;
-    }
-
     epev.events = events | flags;
     epev.data.ptr = p_ev;
     errno = 0;
@@ -128,8 +124,6 @@ void epoll_add_event(hixo_event_t *p_ev,
                 getpid(),
                 p_sock->m_fd,
                 tmp_err);
-    } else {
-        p_ev->m_active = TRUE;
     }
 
     return;
@@ -148,10 +142,6 @@ void epoll_del_event(hixo_event_t *p_ev,
     struct epoll_event epev;
     hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
-    if (!p_ev->m_active) {
-        return;
-    }
-
     epev.events = events | flags;
     epev.data.ptr = p_ev;
     errno = 0;
@@ -165,18 +155,15 @@ void epoll_del_event(hixo_event_t *p_ev,
                 "[WARNING][%d] del event failed: %d\n",
                 getpid(),
                 tmp_err);
-    } else {
-        p_ev->m_active = FALSE;
     }
 
     return;
 }
 
-int epoll_process_events(void)
+int epoll_process_events(int timer)
 {
     int nevents = 0;
     int tmp_err = 0;
-    int timer = 20;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
     if (spinlock_try(g_rt_ctx.mp_accept_lock)) {
@@ -186,7 +173,31 @@ int epoll_process_events(void)
     }
 
     if (s_epoll_private.m_hold_lock) {
+        for (list_t *p_iter = g_rt_ctx.mp_listeners_evs;
+             NULL != p_iter;
+             p_iter = *(list_t **)p_iter)
+        {
+            hixo_event_t *p_ev = CONTAINER_OF(p_iter, hixo_event_t, m_node);
+
+            if (p_ev->m_active) {
+                continue;
+            }
+            epoll_add_event(p_ev, EPOLLIN, EPOLLET);
+            p_ev->m_active = TRUE;
+        }
     } else {
+        for (list_t *p_iter = g_rt_ctx.mp_listeners_evs;
+             NULL != p_iter;
+             p_iter = *(list_t **)p_iter)
+        {
+            hixo_event_t *p_ev = CONTAINER_OF(p_iter, hixo_event_t, m_node);
+
+            if (!p_ev->m_active) {
+                continue;
+            }
+            epoll_del_event(p_ev, EPOLLIN, EPOLLET);
+            p_ev->m_active = FALSE;
+        }
     }
 
     errno = 0;
@@ -214,7 +225,14 @@ int epoll_process_events(void)
         return HIXO_OK;
     }
 
+    fprintf(stderr, "[INFO]nevents %d\n", nevents);
     for (int i = 0; i < nevents; ++i) {
+        struct epoll_event *p_epev = &s_epoll_private.mp_epevs[i];
+        hixo_event_t *p_event = NULL;
+
+
+        assert(NULL != p_event->mpf_event_handler);
+        (*p_event->mpf_event_handler)(p_event->mp_data);
     }
 
     return HIXO_OK;

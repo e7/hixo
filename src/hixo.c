@@ -41,7 +41,7 @@ static int master_main(void)
     return HIXO_OK;
 }
 
-static int worker_loop(void)
+static int event_loop(void)
 {
     int rslt = HIXO_ERROR;
     int fatal_err = FALSE;
@@ -73,7 +73,7 @@ static int worker_loop(void)
     }
 
     while (TRUE) {
-        rslt = (*p_ev_ctx->mpf_process_events)();
+        rslt = (*p_ev_ctx->mpf_process_events)(20);
 
         if (-1 == rslt) {
             break;
@@ -133,7 +133,7 @@ static int worker_main(void)
         goto ERR_INIT_WORKER;
     }
 
-    rslt = worker_loop();
+    rslt = event_loop();
 
     do {
 ERR_INIT_WORKER:

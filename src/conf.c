@@ -18,7 +18,7 @@
 
 
 #define DAEMON                  FALSE
-#define WORKER_PROCESSES        4
+#define WORKER_PROCESSES        1
 #define MAX_CONNECTIONS         512
 #define MAX_EVENTS              512
 #define TIMER_RESOLUTION        20
