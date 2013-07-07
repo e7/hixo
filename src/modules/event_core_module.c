@@ -174,8 +174,6 @@ ERR_SHMGET:
 
 static void event_core_exit_master(void)
 {
-    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
-
     for (list_t *p_iter = g_rt_ctx.mp_listeners_evs;
          NULL != p_iter;
          p_iter = *(list_t **)p_iter)

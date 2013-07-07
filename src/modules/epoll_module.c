@@ -179,11 +179,11 @@ int epoll_process_events(int timer)
         {
             hixo_event_t *p_ev = CONTAINER_OF(p_iter, hixo_event_t, m_node);
 
-            if (p_ev->m_active) {
+            if (p_ev->m_flags & HIXO_EVENT_ACTIVE) {
                 continue;
             }
             epoll_add_event(p_ev, EPOLLIN, EPOLLET);
-            p_ev->m_active = TRUE;
+            p_ev->m_flags &= HIXO_EVENT_ACTIVE;
         }
     } else {
         for (list_t *p_iter = g_rt_ctx.mp_listeners_evs;
@@ -192,11 +192,11 @@ int epoll_process_events(int timer)
         {
             hixo_event_t *p_ev = CONTAINER_OF(p_iter, hixo_event_t, m_node);
 
-            if (!p_ev->m_active) {
+            if (!(p_ev->m_flags & HIXO_EVENT_ACTIVE)) {
                 continue;
             }
             epoll_del_event(p_ev, EPOLLIN, EPOLLET);
-            p_ev->m_active = FALSE;
+            p_ev->m_flags &= ~HIXO_EVENT_ACTIVE;
         }
     }
 
@@ -216,11 +216,6 @@ int epoll_process_events(int timer)
         }
     }
 
-    if (s_epoll_private.m_hold_lock) {
-        (void)spinlock_unlock(g_rt_ctx.mp_accept_lock);
-        s_epoll_private.m_hold_lock = FALSE;
-    }
-
     if (0 == nevents) { // timeout
         return HIXO_OK;
     }
@@ -233,6 +228,11 @@ int epoll_process_events(int timer)
 
         assert(NULL != p_event->mpf_event_handler);
         (*p_event->mpf_event_handler)(p_event->mp_data);
+    }
+
+    if (s_epoll_private.m_hold_lock) { // 只有拿到锁的进程才能解锁
+        (void)spinlock_unlock(g_rt_ctx.mp_accept_lock);
+        s_epoll_private.m_hold_lock = FALSE;
     }
 
     return HIXO_OK;
