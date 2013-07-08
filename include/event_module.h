@@ -19,15 +19,13 @@
 #include "hixo.h"
 
 
-#define HIXO_EVENT_ACTIVE       (1U << 0)
-#define HIXO_EVENT_STALE        (1U << 1)
-
 struct s_event_t {
-    void (*mpf_event_handler)(hixo_socket_t *);
+    void (*mpf_read_handler)(hixo_socket_t *);
+    void (*mpf_write_handler)(hixo_socket_t *);
     list_t m_node;
     void *mp_data;
-    uint32_t m_ref;
-    uint32_t m_flags;
+    unsigned int m_active : 1;
+    unsigned int m_stale : 1;
 };
 
 typedef struct {

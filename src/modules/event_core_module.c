@@ -28,6 +28,30 @@ static hixo_core_module_ctx_t s_event_core_ctx = {
     &s_event_core_private,
 };
 
+static void hixo_handle_accept(hixo_socket_t *p_sock)
+{
+    int fd = 0;
+    int tmp_err = 0;
+    struct sockaddr client_addr;
+    socklen_t len = 0;
+
+    while (TRUE) {
+        errno = 0;
+        fd = accept(p_sock->m_fd, &client_addr, &len);
+        tmp_err = errno;
+
+        if ((EAGAIN == tmp_err) || (EWOULDBLOCK == tmp_err)) {
+            break;
+        }
+
+        if (ECONNABORTED == tmp_err) {
+            continue;
+        }
+    }
+
+    return;
+}
+
 static int event_core_init_master(void)
 {
     int rslt = HIXO_ERROR;
@@ -65,6 +89,8 @@ static int event_core_init_master(void)
     for (int i = 0; i < p_conf->m_nservers; ++i) {
         p_event = (hixo_event_t *)alloc_resource(&g_rt_ctx.m_events_cache);
         assert(NULL != p_event);
+        p_event->mpf_read_handler = &hixo_handle_accept;
+
         p_listener
             = (hixo_socket_t *)alloc_resource(&g_rt_ctx.m_sockets_cache);
         assert(NULL != p_listener);

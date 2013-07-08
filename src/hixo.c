@@ -73,7 +73,7 @@ static int event_loop(void)
     }
 
     while (TRUE) {
-        rslt = (*p_ev_ctx->mpf_process_events)(20);
+        rslt = (*p_ev_ctx->mpf_process_events)(5000);
 
         if (-1 == rslt) {
             break;

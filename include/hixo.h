@@ -157,6 +157,7 @@ typedef struct {
     atomic_t *mp_accept_lock;
     list_t *mp_listeners;
     list_t *mp_listeners_evs;
+    list_t *mp_connections;
     hixo_resource_t m_sockets_cache;
     hixo_resource_t m_events_cache;
 } hixo_rt_context_t;
