@@ -52,6 +52,7 @@ typedef volatile uintptr_t atomic_t;
                 (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
              })
 #define MIN(a, b)           (((a) > (b)) ? (b) : (a))
+#define MAX(a, b)           (((a) < (b)) ? (b) : (a))
 
 #ifndef ESUCCESS
     #define ESUCCESS        (0)

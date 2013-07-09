@@ -37,8 +37,10 @@ typedef struct s_socket_t hixo_socket_t;
 typedef struct {
     void *mp_start;
     void *mp_end;
-    size_t m_offset; // offset of list node
+    int m_offset; // offset of list node
     list_t *mp_free_list;
+    int m_used;
+    int m_capacity;
 } hixo_resource_t;
 
 static inline
@@ -75,6 +77,8 @@ int create_resource(hixo_resource_t *p_rsc,
                                 + offset);
         add_node(&p_rsc->mp_free_list, p_node);
     }
+    p_rsc->m_used = 0;
+    p_rsc->m_capacity = count;
 
     return HIXO_OK;
 }
@@ -89,6 +93,7 @@ void *alloc_resource(hixo_resource_t *p_rsc)
     }
     p_node = p_rsc->mp_free_list;
     assert(rm_node(&p_rsc->mp_free_list, p_node));
+    ++p_rsc->m_used;
 
     return ((uint8_t *)p_node) - p_rsc->m_offset;
 }
@@ -107,6 +112,7 @@ void free_resource(hixo_resource_t *p_rsc, void *p_elemt)
 
     p_node = (list_t *)(((uint8_t *)p_elemt) + p_rsc->m_offset);
     add_node(&p_rsc->mp_free_list, p_node);
+    --p_rsc->m_used;
 
     return;
 
@@ -125,6 +131,8 @@ void destroy_resource(hixo_resource_t *p_rsc)
     }
     p_rsc->mp_end = NULL;
     p_rsc->mp_free_list = NULL;
+    p_rsc->m_used = 0;
+    p_rsc->m_capacity = 0;
 }
 // }} hixo_resource_t
 
@@ -154,13 +162,20 @@ typedef struct {
 
 typedef struct {
     hixo_conf_t *mp_conf;
+    void *mp_ctx;
     atomic_t *mp_accept_lock;
-    list_t *mp_listeners;
-    list_t *mp_listeners_evs;
+    hixo_event_t **mpp_listeners;
     list_t *mp_connections;
     hixo_resource_t m_sockets_cache;
     hixo_resource_t m_events_cache;
 } hixo_rt_context_t;
 
+typedef struct {
+    int m_master;
+    int m_power;
+} hixo_ps_status_t;
+
+
 extern hixo_rt_context_t g_rt_ctx;
+extern hixo_ps_status_t g_ps_status;
 #endif // __HIXO_H__

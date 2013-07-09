@@ -29,7 +29,6 @@ typedef struct s_conf_t {
     int m_daemon;
     int m_worker_processes;
     int m_max_connections;
-    int m_max_events;
     int m_timer_resolution;
     int m_connection_timeout;
     hixo_listen_conf_t const **mppc_srv_addrs;

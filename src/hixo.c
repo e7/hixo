@@ -31,8 +31,9 @@ hixo_module_t *gap_modules[] = {
 };
 
 
-bitmap_t g_lsn_sockets_bm = {NULL, 0};
-int g_master = TRUE;
+hixo_ps_status_t g_ps_status = {
+    TRUE,
+};
 
 static int master_main(void)
 {
@@ -45,6 +46,7 @@ static int event_loop(void)
 {
     int rslt = HIXO_ERROR;
     int fatal_err = FALSE;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     hixo_event_module_ctx_t *p_ev_ctx = NULL;
 
     for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
@@ -73,7 +75,7 @@ static int event_loop(void)
     }
 
     while (TRUE) {
-        rslt = (*p_ev_ctx->mpf_process_events)(5000);
+        rslt = (*p_ev_ctx->mpf_process_events)(p_conf->m_timer_resolution);
 
         if (-1 == rslt) {
             break;
@@ -172,15 +174,15 @@ static int hixo_main(void)
         if (-1 == cpid) {
             return -1;
         } else if (0 == cpid) {
-            g_master = FALSE;
+            g_ps_status.m_master = FALSE;
 
             break;
         } else {
-            g_master = TRUE;
+            g_ps_status.m_master = TRUE;
         }
     }
 
-    if (g_master) {
+    if (g_ps_status.m_master) {
         rslt = master_main();
     } else {
         rslt = worker_main();

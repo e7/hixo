@@ -20,8 +20,7 @@
 #define DAEMON                  FALSE
 #define WORKER_PROCESSES        1
 #define MAX_CONNECTIONS         512
-#define MAX_EVENTS              512
-#define TIMER_RESOLUTION        20
+#define TIMER_RESOLUTION        1000
 #define CONNECTION_TIME_OUT     60
 
 static hixo_listen_conf_t const S_SRV_ADDRS[] = {
@@ -33,7 +32,7 @@ static hixo_listen_conf_t const S_SRV_ADDRS[] = {
 
 int create_conf(hixo_conf_t *p_conf)
 {
-    if (ARRAY_COUNT(S_SRV_ADDRS) > MIN(MAX_CONNECTIONS, MAX_EVENTS)) {
+    if (ARRAY_COUNT(S_SRV_ADDRS) > MAX_CONNECTIONS) {
         return HIXO_ERROR;
     }
 
@@ -48,7 +47,6 @@ int create_conf(hixo_conf_t *p_conf)
     p_conf->m_daemon = DAEMON;
     p_conf->m_worker_processes = WORKER_PROCESSES;
     p_conf->m_max_connections = MAX_CONNECTIONS;
-    p_conf->m_max_events = MAX_EVENTS;
     p_conf->m_timer_resolution = TIMER_RESOLUTION;
     p_conf->m_connection_timeout = CONNECTION_TIME_OUT;
     p_conf->m_nservers = 0;
