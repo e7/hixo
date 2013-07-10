@@ -30,9 +30,9 @@ struct {
 
 
 static int epoll_init(void);
-static void epoll_add_event(hixo_event_t *p_ev);
+static void epoll_add_event(hixo_socket_t *p_ev);
 static int epoll_mod_event(void);
-static void epoll_del_event(hixo_event_t *p_ev);
+static void epoll_del_event(hixo_socket_t *p_ev);
 static int epoll_process_events(int timer);
 static void epoll_exit(void);
 
@@ -98,18 +98,17 @@ ERR_EPOLL_CREATE:
     return rslt;
 }
 
-void epoll_add_event(hixo_event_t *p_ev)
+void epoll_add_event(hixo_socket_t *p_sock)
 {
     int tmp_err = 0;
     struct epoll_event epev;
-    hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
-    if (p_ev->m_exists) {
+    if (p_sock->m_exists) {
         return;
     }
 
-    epev.events = p_ev->m_event_types;
-    epev.data.ptr = (void *)(((uintptr_t)p_ev) | (!!p_ev->m_stale));
+    epev.events = p_sock->m_event_types;
+    epev.data.ptr = (void *)(((uintptr_t)p_sock) | (!!p_sock->m_stale));
     errno = 0;
     (void)epoll_ctl(s_epoll_private.m_epfd,
                     EPOLL_CTL_ADD,
@@ -123,7 +122,7 @@ void epoll_add_event(hixo_event_t *p_ev)
                 p_sock->m_fd,
                 tmp_err);
     }
-    p_ev->m_exists = 1U;
+    p_sock->m_exists = 1U;
 
     return;
 }
@@ -133,13 +132,12 @@ int epoll_mod_event(void)
     return HIXO_OK;
 }
 
-void epoll_del_event(hixo_event_t *p_ev)
+void epoll_del_event(hixo_socket_t *p_sock)
 {
     int tmp_err = 0;
     struct epoll_event epev;
-    hixo_socket_t *p_sock = (hixo_socket_t *)p_ev->mp_data;
 
-    if (!p_ev->m_exists) {
+    if (!p_sock->m_exists) {
         return;
     }
 
@@ -155,7 +153,7 @@ void epoll_del_event(hixo_event_t *p_ev)
                 getpid(),
                 tmp_err);
     }
-    p_ev->m_exists = 0U;
+    p_sock->m_exists = 0U;
 
     return;
 }
@@ -183,10 +181,11 @@ int epoll_process_events(int timer)
              NULL != p_iter;
              p_iter = *(list_t **)p_iter)
         {
-            hixo_event_t *p_ev = CONTAINER_OF(p_iter, hixo_event_t, m_node);
+            hixo_socket_t *p_sock
+                = CONTAINER_OF(p_iter, hixo_socket_t, m_node);
 
-            if (p_ev->m_active) {
-                epoll_add_event(p_ev);
+            if (p_sock->m_active) {
+                epoll_add_event(p_sock);
             }
         }
     } else {
@@ -194,12 +193,13 @@ int epoll_process_events(int timer)
              NULL != p_iter;
              p_iter = *(list_t **)p_iter)
         {
-            hixo_event_t *p_ev = CONTAINER_OF(p_iter, hixo_event_t, m_node);
+            hixo_socket_t *p_sock
+                = CONTAINER_OF(p_iter, hixo_socket_t, m_node);
 
-            if (p_ev->m_active) {
+            if (p_sock->m_active) {
                 continue;
             }
-            epoll_del_event(p_ev);
+            epoll_del_event(p_sock);
         }
     }
 
@@ -228,15 +228,11 @@ int epoll_process_events(int timer)
     for (int i = 0; i < nevents; ++i) {
         struct epoll_event *p_epev = &s_epoll_private.mp_epevs[i];
         uintptr_t stale = ((uintptr_t)p_epev->data.ptr) & 1;
-        hixo_event_t *p_event
-            = (hixo_event_t *)((uintptr_t)p_epev->data.ptr & (~1));
-        hixo_socket_t *p_sock = (hixo_socket_t *)p_event->mp_data;
+        hixo_socket_t *p_sock
+            = (hixo_socket_t *)((uintptr_t)p_epev->data.ptr & (~1));
 
-        if (!p_event->m_active) {
-            continue;
-        }
-
-        if ((-1 == p_sock->m_fd) || (stale != p_event->m_stale)) {
+        assert(p_sock->m_active);
+        if ((-1 == p_sock->m_fd) || (stale != p_sock->m_stale)) {
             continue;
         }
 
@@ -245,13 +241,13 @@ int epoll_process_events(int timer)
         }
 
         if (HIXO_EVENT_IN & p_epev->events) {
-            assert(NULL != p_event->mpf_read_handler);
-            (*p_event->mpf_read_handler)(p_sock);
+            assert(NULL != p_sock->mpf_read_handler);
+            (*p_sock->mpf_read_handler)(p_sock);
         }
 
         if (HIXO_EVENT_OUT & p_epev->events) {
-            assert(NULL != p_event->mpf_write_handler);
-            (*p_event->mpf_write_handler)(p_sock);
+            assert(NULL != p_sock->mpf_write_handler);
+            (*p_sock->mpf_write_handler)(p_sock);
         }
     }
 

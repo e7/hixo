@@ -26,23 +26,11 @@
 #define HIXO_EVENT_FLAGS        EPOLLET
 
 
-struct s_event_t {
-    void (*mpf_read_handler)(hixo_socket_t *);
-    void (*mpf_write_handler)(hixo_socket_t *);
-    list_t m_node;
-    int m_event_types;
-    void *mp_data;
-    unsigned int m_active : 1;
-    unsigned int m_exists : 1;
-    unsigned int m_stale : 1;
-};
-
-
 typedef struct {
     int (*mpf_init)(void);
-    void (*mpf_add_event)(hixo_event_t *);
+    void (*mpf_add_event)(hixo_socket_t *);
     int (*mpf_mod_event)(void);
-    void (*mpf_del_event)(hixo_event_t *);
+    void (*mpf_del_event)(hixo_socket_t *);
     int (*mpf_process_events)(int);
     void (*mpf_exit)(void);
 

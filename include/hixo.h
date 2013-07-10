@@ -29,7 +29,6 @@ typedef enum {
 } hixo_module_type_t;
 
 
-typedef struct s_event_t hixo_event_t;
 typedef struct s_socket_t hixo_socket_t;
 
 
@@ -139,8 +138,15 @@ void destroy_resource(hixo_resource_t *p_rsc)
 
 struct s_socket_t {
     int m_fd;
+    void (*mpf_read_handler)(hixo_socket_t *);
+    void (*mpf_write_handler)(hixo_socket_t *);
     list_t m_node;
+    int m_event_types;
+    unsigned int m_active : 1;
+    unsigned int m_exists : 1;
+    unsigned int m_stale : 1;
 };
+
 
 typedef enum {
     UNINITIALIZED = 0xE78F8A,
@@ -164,10 +170,9 @@ typedef struct {
     hixo_conf_t *mp_conf;
     void *mp_ctx;
     atomic_t *mp_accept_lock;
-    hixo_event_t **mpp_listeners;
+    hixo_socket_t **mpp_listeners;
     list_t *mp_connections;
     hixo_resource_t m_sockets_cache;
-    hixo_resource_t m_events_cache;
 } hixo_rt_context_t;
 
 typedef struct {

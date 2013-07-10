@@ -48,7 +48,6 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
 
     assert(NULL != p_ctx);
     while (TRUE) {
-        hixo_event_t *p_event = NULL;
         hixo_socket_t *p_cmnct = NULL;
 
         errno = 0;
@@ -70,18 +69,16 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
             continue;
         }
 
-        p_event = alloc_resource(&g_rt_ctx.m_events_cache);
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
-
-        p_event->mp_data = p_cmnct;
-        p_event->mpf_read_handler = &hixo_handle_read;
-        p_event->mpf_write_handler = &hixo_handle_write;
-        p_event->m_event_types = HIXO_EVENT_IN
+        p_cmnct->m_fd = fd;
+        p_cmnct->mpf_read_handler = &hixo_handle_read;
+        p_cmnct->mpf_write_handler = &hixo_handle_write;
+        p_cmnct->m_event_types = HIXO_EVENT_IN
                                      | HIXO_EVENT_OUT | HIXO_EVENT_FLAGS;
-        p_event->m_active = 1U;
-        p_event->m_exists = 0U;
+        p_cmnct->m_active = 1U;
+        p_cmnct->m_exists = 0U;
 
-        add_node(&g_rt_ctx.mp_connections, &p_event->m_node);
+        add_node(&g_rt_ctx.mp_connections, &p_cmnct->m_node);
 
         --g_ps_status.m_power;
     }
@@ -95,7 +92,6 @@ static int event_core_init_master(void)
     int valid_sockets = 0;
     int tmp_err = 0;
     hixo_socket_t *p_listener = NULL;
-    hixo_event_t *p_event = NULL;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     struct sockaddr_in srv_addr;
 
@@ -106,8 +102,8 @@ static int event_core_init_master(void)
         goto ERR_SHMGET;
     }
 
-    g_rt_ctx.mpp_listeners
-        = (hixo_event_t **)calloc(p_conf->m_nservers, sizeof(hixo_event_t *));
+    g_rt_ctx.mpp_listeners = (hixo_socket_t **)calloc(p_conf->m_nservers,
+                                                      sizeof(hixo_socket_t *));
     if (NULL == g_rt_ctx.mpp_listeners) {
         goto ERR_LISTENERS_CACHE;
     }
@@ -120,18 +116,9 @@ static int event_core_init_master(void)
         fprintf(stderr, "[ERROR] create sockets cache failed\n");
         goto ERR_SOCKETS_CACHE;
     }
-    if (HIXO_ERROR == create_resource(&g_rt_ctx.m_events_cache,
-                                      p_conf->m_max_connections,
-                                      sizeof(hixo_event_t),
-                                      OFFSET_OF(hixo_event_t, m_node)))
-    {
-        fprintf(stderr, "[ERROR] create events cache failed\n");
-        goto ERR_EVENTS_CACHE;
-    }
 
     for (int i = 0; i < p_conf->m_nservers; ++i) {
-        p_event = (hixo_event_t *)alloc_resource(&g_rt_ctx.m_events_cache);
-        assert(NULL != p_event);
+        int fd = 0;
 
         p_listener
             = (hixo_socket_t *)alloc_resource(&g_rt_ctx.m_sockets_cache);
@@ -139,10 +126,9 @@ static int event_core_init_master(void)
 
         // 创建监听套接字
         errno = 0;
-        p_listener->m_fd = socket(PF_INET, SOCK_STREAM, 0);
+        fd = socket(PF_INET, SOCK_STREAM, 0);
         tmp_err = errno;
         if (tmp_err) {
-            free_resource(&g_rt_ctx.m_events_cache, p_event);
             free_resource(&g_rt_ctx.m_sockets_cache, p_listener);
 
             (void)fprintf(stderr, "[ERROR] socket() failed: %d\n", tmp_err);
@@ -153,14 +139,11 @@ static int event_core_init_master(void)
 
         // 设置非阻塞
         errno = 0;
-        (void)unblocking_fd(p_listener->m_fd);
+        (void)unblocking_fd(fd);
         tmp_err = errno;
         if (tmp_err) {
-            (void)close(p_listener->m_fd);
-            p_listener->m_fd = -1;
+            (void)close(fd);
             --valid_sockets;
-
-            free_resource(&g_rt_ctx.m_events_cache, p_event);
             free_resource(&g_rt_ctx.m_sockets_cache, p_listener);
 
             (void)fprintf(stderr, "[ERROR] fcntl() failed: %d\n", tmp_err);
@@ -174,16 +157,11 @@ static int event_core_init_master(void)
         srv_addr.sin_port = htons(p_conf->mppc_srv_addrs[i]->m_port);
 
         errno = 0;
-        (void)bind(p_listener->m_fd,
-                   (struct sockaddr *)&srv_addr,
-                   sizeof(srv_addr));
+        (void)bind(fd, (struct sockaddr *)&srv_addr, sizeof(srv_addr));
         tmp_err = errno;
         if (tmp_err) {
-            (void)close(p_listener->m_fd);
-            p_listener->m_fd = -1;
+            (void)close(fd);
             --valid_sockets;
-
-            free_resource(&g_rt_ctx.m_events_cache, p_event);
             free_resource(&g_rt_ctx.m_sockets_cache, p_listener);
 
             (void)fprintf(stderr, "[ERROR] bind() failed: %d\n", tmp_err);
@@ -192,32 +170,28 @@ static int event_core_init_master(void)
 
         // 监听
         errno = 0;
-        (void)listen(p_listener->m_fd,
-                     (p_conf->mppc_srv_addrs[i]->m_backlog > 0)
-                         ? p_conf->mppc_srv_addrs[i]->m_backlog
-                         : SOMAXCONN);
+        (void)listen(fd, (p_conf->mppc_srv_addrs[i]->m_backlog > 0)
+                             ? p_conf->mppc_srv_addrs[i]->m_backlog
+                             : SOMAXCONN);
         tmp_err = errno;
         if (tmp_err) {
-            (void)close(p_listener->m_fd);
-            p_listener->m_fd = -1;
+            (void)close(fd);
             --valid_sockets;
-
-            free_resource(&g_rt_ctx.m_events_cache, p_event);
             free_resource(&g_rt_ctx.m_sockets_cache, p_listener);
 
             (void)fprintf(stderr, "[ERROR] listen() failed: %d\n", tmp_err);
             continue;
         }
 
-        p_event->mp_data = p_listener;
-        p_event->mpf_read_handler = &hixo_handle_accept;
-        p_event->mpf_write_handler = NULL;
-        p_event->m_event_types = HIXO_EVENT_IN | HIXO_EVENT_FLAGS;
-        p_event->m_active = 0U;
-        p_event->m_exists = 0U;
+        p_listener->m_fd = fd;
+        p_listener->mpf_read_handler = &hixo_handle_accept;
+        p_listener->mpf_write_handler = NULL;
+        p_listener->m_event_types = HIXO_EVENT_IN | HIXO_EVENT_FLAGS;
+        p_listener->m_active = 0U;
+        p_listener->m_exists = 0U;
 
-        g_rt_ctx.mpp_listeners[i] = p_event;
-        add_node(&g_rt_ctx.mp_connections, &p_event->m_node);
+        g_rt_ctx.mpp_listeners[i] = p_listener;
+        add_node(&g_rt_ctx.mp_connections, &p_listener->m_node);
     }
 
     if (0 == valid_sockets) {
@@ -233,9 +207,6 @@ static int event_core_init_master(void)
         break;
 
 ERR_CREATE_LISTENERS:
-        destroy_resource(&g_rt_ctx.m_events_cache);
-
-ERR_EVENTS_CACHE:
         destroy_resource(&g_rt_ctx.m_sockets_cache);
 
 ERR_SOCKETS_CACHE:
@@ -257,19 +228,16 @@ static void event_core_exit_master(void)
          NULL != p_iter;
          p_iter = *(list_t **)p_iter)
     {
-        hixo_event_t *p_event = CONTAINER_OF(p_iter,
-                                             hixo_event_t,
+        hixo_socket_t *p_sock = CONTAINER_OF(p_iter,
+                                             hixo_socket_t,
                                              m_node);
-        hixo_socket_t *p_sock = (hixo_socket_t *)p_event->mp_data;
 
         (void)close(p_sock->m_fd);
-        rm_node(&g_rt_ctx.mp_connections, &p_event->m_node);
+        rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node);
         free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
-        free_resource(&g_rt_ctx.m_events_cache, p_event);
     }
 
     destroy_resource(&g_rt_ctx.m_sockets_cache);
-    destroy_resource(&g_rt_ctx.m_events_cache);
 
     (void)shmctl(s_event_core_private.m_shmid, IPC_RMID, 0);
     s_event_core_private.m_shmid = -1;
