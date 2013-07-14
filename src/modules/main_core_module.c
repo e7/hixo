@@ -45,7 +45,6 @@ static void main_core_exit(void)
 
 hixo_module_t g_main_core_module = {
     HIXO_MODULE_CORE,
-    UNINITIALIZED,
     &main_core_init,
     NULL,
     NULL,

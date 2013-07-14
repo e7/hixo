@@ -26,6 +26,7 @@
 typedef enum {
     HIXO_MODULE_CORE,
     HIXO_MODULE_EVENT,
+    HIXO_MODULE_APP,
 } hixo_module_type_t;
 
 
@@ -156,7 +157,6 @@ typedef enum {
 } hixo_module_status_t;
 typedef struct {
     hixo_module_type_t m_type;
-    hixo_module_status_t m_status;
     int (*mpf_init_master)(void);
     int (*mpf_init_worker)(void);
     int (*mpf_init_thread)(void);

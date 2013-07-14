@@ -37,24 +37,23 @@ static int epoll_process_events(int timer);
 static void epoll_exit(void);
 
 static hixo_event_module_ctx_t s_epoll_module_ctx = {
-    &epoll_init,
+    NULL,
     &epoll_add_event,
     &epoll_mod_event,
     &epoll_del_event,
     &epoll_process_events,
-    &epoll_exit,
+    NULL,
     FALSE,
     &s_epoll_private,
 };
 
 hixo_module_t g_epoll_module = {
     HIXO_MODULE_EVENT,
-    UNINITIALIZED,
+    NULL,
+    &epoll_init,
     NULL,
     NULL,
-    NULL,
-    NULL,
-    NULL,
+    &epoll_exit,
     NULL,
     &s_epoll_module_ctx,
 };

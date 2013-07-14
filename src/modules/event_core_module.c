@@ -283,7 +283,6 @@ static void event_core_exit_worker(void)
 
 hixo_module_t g_event_core_module = {
     HIXO_MODULE_CORE,
-    UNINITIALIZED,
     &event_core_init_master,
     &event_core_init_worker,
     NULL,
