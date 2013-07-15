@@ -1,7 +1,8 @@
-COMPILE_FALGS = -Wall -pipe -std=c99 -I $(top_srcdir)/include
-COMPILE_FALGS += `getconf LFS_CFLAGS`
+COMPILE_FLAGS = -Wall -pipe -std=c99 -I $(top_srcdir)/include
+COMPILE_FLAGS += `getconf LFS_CFLAGS`
+COMPILE_FLAGS += -DPAGE_SIZE=`getconf PAGE_SIZE`
 
-AM_CFLAGS = ${COMPILE_FALGS}
+AM_CFLAGS = ${COMPILE_FLAGS}
 AM_LDFLAGS = -lpthread
 
 bin_PROGRAMS = hixo

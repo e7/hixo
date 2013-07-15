@@ -21,21 +21,30 @@ int hixo_create_buffer(hixo_buffer_t *p_buf, ssize_t capacity)
     int rslt;
     uint8_t *p_data;
 
-    p_data = (uint8_t *)calloc(1, capacity);
-    if (NULL == p_data) {
-        goto ERR_OUT_OF_MEM;
-    }
+    if (capacity < 0) {
+        goto ERROR;
+    } else if (capacity > 0) {
+        p_data = (uint8_t *)calloc(1, capacity);
+        if (NULL == p_data) {
+            goto ERROR;
+        }
 
-    p_buf->mp_buf = p_data;
-    p_buf->m_offset = 0;
-    p_buf->m_size = 0;
-    p_buf->m_capacity = capacity;
+        p_buf->mp_buf = p_data;
+        p_buf->m_offset = 0;
+        p_buf->m_size = 0;
+        p_buf->m_capacity = capacity;
+    } else {
+        p_buf->mp_buf = NULL;
+        p_buf->m_offset = 0;
+        p_buf->m_size = 0;
+        p_buf->m_capacity = 0;
+    }
 
     do {
         rslt = HIXO_OK;
         break;
 
-ERR_OUT_OF_MEM:
+ERROR:
         rslt = HIXO_ERROR;
         break;
     } while (0);

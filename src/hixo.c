@@ -18,9 +18,7 @@
 #include "event_module.h"
 
 
-struct {
-    int const MAX_FILE_NO;
-} g_sysconf = {};
+hixo_sysconf_t  g_sysconf = {};
 hixo_rt_context_t g_rt_ctx = {};
 
 // 模块数组
@@ -40,7 +38,8 @@ static int hixo_get_sysconf(void)
     int rslt = 0;
     int tmp_err = 0;
     struct rlimit rlmt;
-    int *p_file_no = (int *)&g_sysconf.MAX_FILE_NO;
+    int *p_file_no = (int *)&g_sysconf.M_MAX_FILE_NO;
+    int *p_page_size = (int *)&g_sysconf.M_PAGE_SIZE;
 
     errno = 0;
     rslt = getrlimit(RLIMIT_NOFILE, &rlmt);
@@ -51,6 +50,8 @@ static int hixo_get_sysconf(void)
         return HIXO_ERROR;
     }
     *p_file_no = rlmt.rlim_cur;
+
+    *p_page_size = PAGE_SIZE;
 
     return HIXO_OK;
 }

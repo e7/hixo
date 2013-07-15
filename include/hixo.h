@@ -29,9 +29,7 @@ typedef enum {
     HIXO_MODULE_APP,
 } hixo_module_type_t;
 
-
 typedef struct s_socket_t hixo_socket_t;
-
 struct s_socket_t {
     int m_fd;
     void (*mpf_read_handler)(hixo_socket_t *);
@@ -47,13 +45,6 @@ struct s_socket_t {
     unsigned int m_writable : 1;
 };
 
-
-typedef enum {
-    UNINITIALIZED = 0xE78F8A,
-    MASTER_INITIALIZED = UNINITIALIZED + 1,
-    WORKER_INITIALIZED = MASTER_INITIALIZED + 1,
-    THREAD_INITIALIZED = WORKER_INITIALIZED + 1,
-} hixo_module_status_t;
 typedef struct {
     hixo_module_type_t m_type;
     int (*mpf_init_master)(void);
@@ -64,6 +55,11 @@ typedef struct {
     void (*mpf_exit_master)(void);
     void *mp_ctx;
 } hixo_module_t;
+
+typedef struct {
+    int const M_PAGE_SIZE;
+    int const M_MAX_FILE_NO;
+} hixo_sysconf_t;
 
 typedef struct {
     hixo_conf_t *mp_conf;
@@ -80,6 +76,7 @@ typedef struct {
 } hixo_ps_status_t;
 
 
+extern hixo_sysconf_t g_sysconf;
 extern hixo_rt_context_t g_rt_ctx;
 extern hixo_ps_status_t g_ps_status;
 #endif // __HIXO_H__
