@@ -3,6 +3,7 @@ AC_INIT([hixo], [1.0])
 AM_INIT_AUTOMAKE
 AC_DEFINE([_XOPEN_SOURCE], [1])
 AC_PROG_CC
+AM_PROG_CC_C_O
 AC_CONFIG_SRCDIR([src/hixo.c])
 AC_CONFIG_FILES([Makefile]
                 [src/Makefile]

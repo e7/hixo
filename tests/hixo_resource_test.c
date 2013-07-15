@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include "common.h"
 #include "hixo.h"
-#include "list.h"
+#include "resource.h"
 
 typedef struct {
     int x;

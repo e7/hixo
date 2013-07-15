@@ -189,6 +189,8 @@ static int event_core_init_master(void)
         p_listener->m_event_types = HIXO_EVENT_IN | HIXO_EVENT_FLAGS;
         p_listener->m_active = 0U;
         p_listener->m_exists = 0U;
+        p_listener->m_readable = 0U;
+        p_listener->m_writable = 0U;
 
         g_rt_ctx.mpp_listeners[i] = p_listener;
         add_node(&g_rt_ctx.mp_connections, &p_listener->m_node);
