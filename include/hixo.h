@@ -17,6 +17,7 @@
 #include "bitmap.h"
 #include "conf.h"
 #include "spinlock.h"
+#include "buffer.h"
 
 
 #ifndef __HIXO_H__
@@ -143,9 +144,13 @@ struct s_socket_t {
     void (*mpf_write_handler)(hixo_socket_t *);
     list_t m_node;
     int m_event_types;
+    hixo_buffer_t m_readbuf;
+    hixo_buffer_t m_writebuf;
     unsigned int m_active : 1;
     unsigned int m_exists : 1;
     unsigned int m_stale : 1;
+    unsigned int m_readable : 1;
+    unsigned int m_writable : 1;
 };
 
 
