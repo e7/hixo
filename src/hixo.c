@@ -26,6 +26,7 @@ hixo_module_t *gap_modules[] = {
     &g_main_core_module,
     &g_event_core_module,
     &g_epoll_module,
+    NULL,
 };
 
 
@@ -62,7 +63,7 @@ static int event_loop(void)
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     hixo_event_module_ctx_t *p_ev_ctx = NULL;
 
-    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
         if (HIXO_MODULE_EVENT != gap_modules[i]->m_type) {
             continue;
         }
@@ -99,7 +100,7 @@ int init_worker(hixo_module_type_t mod_type)
 {
     int rslt = HIXO_OK;
 
-    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
         if (mod_type != gap_modules[i]->m_type) {
             continue;
         }
@@ -119,7 +120,7 @@ int init_worker(hixo_module_type_t mod_type)
 
 void exit_worker(hixo_module_type_t mod_type)
 {
-    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
         if (mod_type != gap_modules[i]->m_type) {
             continue;
         }
@@ -178,7 +179,7 @@ int init_master(hixo_module_type_t mod_type)
 {
     int rslt = HIXO_OK;
 
-    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
         if (mod_type != gap_modules[i]->m_type) {
             continue;
         }
@@ -199,7 +200,7 @@ int init_master(hixo_module_type_t mod_type)
 
 void exit_master(hixo_module_type_t mod_type)
 {
-    for (int i = 0; i < ARRAY_COUNT(gap_modules); ++i) {
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
         if (mod_type != gap_modules[i]->m_type) {
             continue;
         }
