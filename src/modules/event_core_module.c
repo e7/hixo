@@ -71,13 +71,19 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
 
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
         assert(NULL != p_cmnct);
-        p_cmnct->m_fd = fd;
-        p_cmnct->mpf_read_handler = &hixo_handle_read;
-        p_cmnct->mpf_write_handler = &hixo_handle_write;
-        p_cmnct->m_event_types = HIXO_EVENT_IN
-                                     | HIXO_EVENT_OUT | HIXO_EVENT_FLAGS;
+        if (HIXO_ERROR == hixo_create_socket(p_cmnct,
+                                             fd,
+                                             HIXO_CMNCT_SOCKET,
+                                             &hixo_handle_read,
+                                             &hixo_handle_write))
+        {
+            free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
+            (void)close(fd);
+            continue;
+        }
 
         if (HIXO_ERROR == (*p_ctx->mpf_add_event)(p_cmnct)) {
+            hixo_destroy_socket(p_cmnct);
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
             (void)close(fd);
             continue;
@@ -207,14 +213,12 @@ static int event_core_init_master(void)
             continue;
         }
 
-        p_listener->m_fd = fd;
-        p_listener->mpf_read_handler = &hixo_handle_accept;
-        p_listener->mpf_write_handler = NULL;
-        p_listener->m_event_types = HIXO_EVENT_IN | HIXO_EVENT_FLAGS;
-        (void)hixo_create_buffer(&p_listener->m_readbuf, 0);
-        (void)hixo_create_buffer(&p_listener->m_writebuf, 0);
-        p_listener->m_readable = 0U;
-        p_listener->m_writable = 0U;
+        (void)hixo_create_socket(p_listener,
+                                 fd,
+                                 HIXO_LISTEN_SOCKET,
+                                 &hixo_handle_accept,
+                                 NULL);
+
         g_rt_ctx.mpp_listeners[i] = p_listener;
         add_node(&g_rt_ctx.mp_connections, &p_listener->m_node);
 

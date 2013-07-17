@@ -15,8 +15,10 @@
 
 #include "conf.h"
 #include "spinlock.h"
-#include "buffer.h"
 #include "resource.h"
+#include "socket.h"
+#include "list.h"
+#include "buffer.h"
 
 
 #ifndef __HIXO_H__
@@ -28,21 +30,6 @@ typedef enum {
     HIXO_MODULE_EVENT,
     HIXO_MODULE_APP,
 } hixo_module_type_t;
-
-typedef struct s_socket_t hixo_socket_t;
-struct s_socket_t {
-    int m_fd;
-    void (*mpf_read_handler)(hixo_socket_t *);
-    void (*mpf_write_handler)(hixo_socket_t *);
-    list_t m_node;
-    list_t m_posted_node;
-    int m_event_types;
-    hixo_buffer_t m_readbuf;
-    hixo_buffer_t m_writebuf;
-    unsigned int m_stale : 1;
-    unsigned int m_readable : 1;
-    unsigned int m_writable : 1;
-};
 
 typedef struct {
     hixo_module_type_t m_type;

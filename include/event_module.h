@@ -19,13 +19,6 @@
 #include "hixo.h"
 
 
-#define HIXO_EVENT_IN           EPOLLIN
-#define HIXO_EVENT_OUT          EPOLLOUT
-#define HIXO_EVENT_ERR          EPOLLERR
-#define HIXO_EVENT_HUP          EPOLLHUP
-#define HIXO_EVENT_FLAGS        EPOLLET
-
-
 typedef struct {
     int (*mpf_init)(void);
     int (*mpf_add_event)(hixo_socket_t *);
