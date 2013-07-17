@@ -76,7 +76,6 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         p_cmnct->m_event_types = HIXO_EVENT_IN
                                      | HIXO_EVENT_OUT | HIXO_EVENT_FLAGS;
         p_cmnct->m_active = 1U;
-        p_cmnct->m_exists = 0U;
 
         add_node(&g_rt_ctx.mp_connections, &p_cmnct->m_node);
 
@@ -209,7 +208,6 @@ static int event_core_init_master(void)
         (void)hixo_create_buffer(&p_listener->m_readbuf, 0);
         (void)hixo_create_buffer(&p_listener->m_writebuf, 0);
         p_listener->m_active = 0U;
-        p_listener->m_exists = 0U;
         p_listener->m_readable = 0U;
         p_listener->m_writable = 0U;
         g_rt_ctx.mpp_listeners[i] = p_listener;

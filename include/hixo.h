@@ -39,7 +39,6 @@ struct s_socket_t {
     hixo_buffer_t m_readbuf;
     hixo_buffer_t m_writebuf;
     unsigned int m_active : 1;
-    unsigned int m_exists : 1;
     unsigned int m_stale : 1;
     unsigned int m_readable : 1;
     unsigned int m_writable : 1;

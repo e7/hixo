@@ -102,10 +102,6 @@ void epoll_add_event(hixo_socket_t *p_sock)
     int tmp_err = 0;
     struct epoll_event epev;
 
-    if (p_sock->m_exists) {
-        return;
-    }
-
     epev.events = p_sock->m_event_types;
     epev.data.ptr = (void *)(((uintptr_t)p_sock) | (!!p_sock->m_stale));
     errno = 0;
@@ -114,14 +110,9 @@ void epoll_add_event(hixo_socket_t *p_sock)
                     p_sock->m_fd,
                     &epev);
     tmp_err = errno;
-    if (tmp_err) {
-        fprintf(stderr,
-                "[WARNING][%d] add event %d failed: %d\n",
-                getpid(),
-                p_sock->m_fd,
-                tmp_err);
+    if ((tmp_err) && (EEXIST != tmp_err)) {
+        (void)fprintf(stderr, "[ERROR] epoll_ctl failed: %d\n", tmp_err);
     }
-    p_sock->m_exists = 1U;
 
     return;
 }
@@ -136,23 +127,16 @@ void epoll_del_event(hixo_socket_t *p_sock)
     int tmp_err = 0;
     struct epoll_event epev;
 
-    if (!p_sock->m_exists) {
-        return;
-    }
-
     errno = 0;
     (void)epoll_ctl(s_epoll_private.m_epfd,
                     EPOLL_CTL_DEL,
                     p_sock->m_fd,
                     &epev);
     tmp_err = errno;
-    if (tmp_err) {
-        fprintf(stderr,
-                "[WARNING][%d] del event failed: %d\n",
-                getpid(),
-                tmp_err);
+    tmp_err = errno;
+    if ((tmp_err) && (ENOENT != tmp_err)) {
+        (void)fprintf(stderr, "[ERROR] epoll_ctl failed: %d\n", tmp_err);
     }
-    p_sock->m_exists = 0U;
 
     return;
 }
