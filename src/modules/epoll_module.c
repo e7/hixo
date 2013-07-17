@@ -30,9 +30,9 @@ struct {
 
 
 static int epoll_init(void);
-static void epoll_add_event(hixo_socket_t *p_ev);
+static int epoll_add_event(hixo_socket_t *p_ev);
 static int epoll_mod_event(void);
-static void epoll_del_event(hixo_socket_t *p_ev);
+static int epoll_del_event(hixo_socket_t *p_ev);
 static int epoll_process_events(int timer);
 static void epoll_exit(void);
 
@@ -97,8 +97,9 @@ ERR_EPOLL_CREATE:
     return rslt;
 }
 
-void epoll_add_event(hixo_socket_t *p_sock)
+int epoll_add_event(hixo_socket_t *p_sock)
 {
+    int rslt;
     int tmp_err = 0;
     struct epoll_event epev;
 
@@ -110,11 +111,14 @@ void epoll_add_event(hixo_socket_t *p_sock)
                     p_sock->m_fd,
                     &epev);
     tmp_err = errno;
-    if ((tmp_err) && (EEXIST != tmp_err)) {
+    if ((!tmp_err) || (EEXIST == tmp_err)) {
+        rslt = HIXO_OK;
+    } else {
         (void)fprintf(stderr, "[ERROR] epoll_ctl failed: %d\n", tmp_err);
+        rslt = HIXO_ERROR;
     }
 
-    return;
+    return rslt;
 }
 
 int epoll_mod_event(void)
@@ -122,8 +126,9 @@ int epoll_mod_event(void)
     return HIXO_OK;
 }
 
-void epoll_del_event(hixo_socket_t *p_sock)
+int epoll_del_event(hixo_socket_t *p_sock)
 {
+    int rslt;
     int tmp_err = 0;
     struct epoll_event epev;
 
@@ -134,11 +139,14 @@ void epoll_del_event(hixo_socket_t *p_sock)
                     &epev);
     tmp_err = errno;
     tmp_err = errno;
-    if ((tmp_err) && (ENOENT != tmp_err)) {
+    if ((!tmp_err) || (ENOENT == tmp_err)) {
+        rslt = HIXO_OK;
+    } else {
         (void)fprintf(stderr, "[ERROR] epoll_ctl failed: %d\n", tmp_err);
+        rslt = HIXO_ERROR;
     }
 
-    return;
+    return rslt;
 }
 
 int epoll_process_events(int timer)
@@ -154,44 +162,40 @@ int epoll_process_events(int timer)
         s_epoll_private.m_hold_lock = FALSE;
     }
 
-    for (int i = 0; i < p_conf->m_nservers; ++i) {
-        g_rt_ctx.mpp_listeners[i]->m_active
-            = s_epoll_private.m_hold_lock ? 1U : 0U;
-    }
-
     if (s_epoll_private.m_hold_lock) {
-        for (list_t *p_iter = g_rt_ctx.mp_connections;
-             NULL != p_iter;
-             p_iter = *(list_t **)p_iter)
-        {
-            hixo_socket_t *p_sock
-                = CONTAINER_OF(p_iter, hixo_socket_t, m_node);
-
-            if (p_sock->m_active) {
-                epoll_add_event(p_sock);
+        for (int i = 0; i < p_conf->m_nservers; ++i) {
+            assert(0 == (((uintptr_t)g_rt_ctx.mpp_listeners[i]) & 1));
+            if (HIXO_ERROR == epoll_add_event(g_rt_ctx.mpp_listeners[i])) {
+                g_rt_ctx.mpp_listeners[i] = (hixo_socket_t *)(
+                        ((uintptr_t)g_rt_ctx.mpp_listeners[i]) | 1
+                );
+                break;
             }
-        }
-    } else {
-        for (list_t *p_iter = g_rt_ctx.mp_connections;
-             NULL != p_iter;
-             p_iter = *(list_t **)p_iter)
-        {
-            hixo_socket_t *p_sock
-                = CONTAINER_OF(p_iter, hixo_socket_t, m_node);
-
-            if (p_sock->m_active) {
-                continue;
-            }
-            epoll_del_event(p_sock);
         }
     }
 
+    assert(NULL == g_rt_ctx.mp_posted_events);
     errno = 0;
     nevents = epoll_wait(s_epoll_private.m_epfd,
                          s_epoll_private.mp_epevs,
                          p_conf->m_max_connections,
                          timer);
     tmp_err = (-1 == nevents) ? errno : 0;
+
+    if (s_epoll_private.m_hold_lock) {
+        for (int i = 0; i < p_conf->m_nservers; ++i) {
+            if (((uintptr_t)g_rt_ctx.mpp_listeners[i]) & 1) {
+                g_rt_ctx.mpp_listeners[i] = (hixo_socket_t *)(
+                        ((uintptr_t)g_rt_ctx.mpp_listeners[i]) & (~1)
+                );
+                continue;
+            }
+            if (HIXO_ERROR == epoll_del_event(g_rt_ctx.mpp_listeners[i])) {
+                break;
+            }
+        }
+    }
+
     if (tmp_err) {
         if (EINTR == tmp_err) {
             goto EXIT;
@@ -207,14 +211,12 @@ int epoll_process_events(int timer)
     }
 
     // 处理事件
-    g_rt_ctx.mp_ctx = &s_epoll_module_ctx;
     for (int i = 0; i < nevents; ++i) {
         struct epoll_event *p_epev = &s_epoll_private.mp_epevs[i];
         uintptr_t stale = ((uintptr_t)p_epev->data.ptr) & 1;
         hixo_socket_t *p_sock
             = (hixo_socket_t *)((uintptr_t)p_epev->data.ptr & (~1));
 
-        assert(p_sock->m_active);
         if ((-1 == p_sock->m_fd) || (stale != p_sock->m_stale)) {
             continue;
         }
@@ -224,13 +226,15 @@ int epoll_process_events(int timer)
         }
 
         if (HIXO_EVENT_IN & p_epev->events) {
-            assert(NULL != p_sock->mpf_read_handler);
-            (*p_sock->mpf_read_handler)(p_sock);
+            p_sock->m_readable = 1U;
         }
 
         if (HIXO_EVENT_OUT & p_epev->events) {
-            assert(NULL != p_sock->mpf_write_handler);
-            (*p_sock->mpf_write_handler)(p_sock);
+            p_sock->m_writable = 1U;
+        }
+
+        if (p_sock->m_writable || p_sock->m_readable) {
+            add_node(&g_rt_ctx.mp_posted_events, &p_sock->m_posted_node);
         }
     }
 

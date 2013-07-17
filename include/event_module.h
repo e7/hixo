@@ -28,9 +28,9 @@
 
 typedef struct {
     int (*mpf_init)(void);
-    void (*mpf_add_event)(hixo_socket_t *);
+    int (*mpf_add_event)(hixo_socket_t *);
     int (*mpf_mod_event)(void);
-    void (*mpf_del_event)(hixo_socket_t *);
+    int (*mpf_del_event)(hixo_socket_t *);
     int (*mpf_process_events)(int);
     void (*mpf_exit)(void);
 

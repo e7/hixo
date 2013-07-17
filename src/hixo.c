@@ -75,11 +75,30 @@ static int event_loop(void)
         goto ERR_NO_EVENT_MODULE;
     }
 
+    g_rt_ctx.mp_ctx = p_ev_ctx;
     while (TRUE) {
         rslt = (*p_ev_ctx->mpf_process_events)(p_conf->m_timer_resolution);
-
         if (-1 == rslt) {
             break;
+        }
+
+        for (list_t *p_iter = g_rt_ctx.mp_posted_events;
+             NULL != p_iter;
+             p_iter = *(list_t **)p_iter)
+        {
+            hixo_socket_t *p_sock = CONTAINER_OF(p_iter,
+                                                 hixo_socket_t,
+                                                 m_posted_node);
+
+            if (p_sock->m_readable) {
+                (*p_sock->mpf_read_handler)(p_sock);
+            }
+            if (p_sock->m_writable) {
+                (*p_sock->mpf_write_handler)(p_sock);
+            }
+
+            assert(rm_node(&g_rt_ctx.mp_posted_events,
+                           &p_sock->m_posted_node));
         }
     }
 

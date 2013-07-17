@@ -35,10 +35,10 @@ struct s_socket_t {
     void (*mpf_read_handler)(hixo_socket_t *);
     void (*mpf_write_handler)(hixo_socket_t *);
     list_t m_node;
+    list_t m_posted_node;
     int m_event_types;
     hixo_buffer_t m_readbuf;
     hixo_buffer_t m_writebuf;
-    unsigned int m_active : 1;
     unsigned int m_stale : 1;
     unsigned int m_readable : 1;
     unsigned int m_writable : 1;
@@ -66,6 +66,7 @@ typedef struct {
     atomic_t *mp_accept_lock;
     hixo_socket_t **mpp_listeners;
     list_t *mp_connections;
+    list_t *mp_posted_events;
     hixo_resource_t m_sockets_cache;
 } hixo_rt_context_t;
 
