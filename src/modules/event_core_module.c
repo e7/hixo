@@ -28,9 +28,55 @@ static hixo_core_module_ctx_t s_event_core_ctx = {
     &s_event_core_private,
 };
 
+static void hixo_handle_close(hixo_socket_t *p_sock)
+{
+    hixo_destroy_socket(p_sock);
+    p_sock->m_readable = 0U;
+    p_sock->m_writable = 0U;
+    p_sock->m_closed = 1U;
+}
+
 static void hixo_handle_read(hixo_socket_t *p_sock)
 {
-    fprintf(stderr, "[INFO] handle read\n");
+    while (p_sock->m_readable) {
+        int tmp_err;
+        ssize_t left_size;
+        uint8_t *p_buf;
+        ssize_t recved_size;
+
+        hixo_buffer_clean(&p_sock->m_readbuf);
+        if (hixo_buffer_full(&p_sock->m_readbuf)) {
+            if (HIXO_ERROR == hixo_expand_buffer(&p_sock->m_readbuf)) {
+                break;
+            }
+        }
+
+        assert(!hixo_buffer_full(&p_sock->m_readbuf));
+        left_size = hixo_get_buffer_capacity(&p_sock->m_readbuf)
+                        - p_sock->m_readbuf.m_size;
+        p_buf = hixo_get_buffer_data(&p_sock->m_readbuf);
+
+        errno = 0;
+        recved_size = recv(p_sock->m_fd,
+                           &p_buf[p_sock->m_readbuf.m_size],
+                           left_size,
+                           0);
+        tmp_err = errno;
+        if (tmp_err) {
+            if (EAGAIN != tmp_err) {
+                (void)fprintf(stderr, "[ERROR] recv failed: %d\n", tmp_err);
+            }
+            p_sock->m_readable = 0U;
+            break;
+        } else if (0 == recved_size) {
+            hixo_handle_close(p_sock);
+            break;
+        } else {
+            p_sock->m_readbuf.m_size += recved_size;
+
+            (void)fprintf(stderr, "%s\n", &p_buf[p_sock->m_readbuf.m_offset]);
+        }
+    }
 }
 
 static void hixo_handle_write(hixo_socket_t *p_sock)

@@ -96,9 +96,12 @@ static int event_loop(void)
             if (p_sock->m_writable) {
                 (*p_sock->mpf_write_handler)(p_sock);
             }
-
             assert(rm_node(&g_rt_ctx.mp_posted_events,
                            &p_sock->m_posted_node));
+            if (p_sock->m_closed) {
+                assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
+                free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
+            }
         }
     }
 

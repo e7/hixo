@@ -49,8 +49,10 @@ int hixo_create_socket(hixo_socket_t *p_sock,
     p_sock->m_fd = fd;
     p_sock->mpf_read_handler = pf_read_handler;
     p_sock->mpf_write_handler = pf_write_handler;
+    p_sock->m_stale = !p_sock->m_stale;
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
+    p_sock->m_closed = 0U;
 
     do {
         rslt = HIXO_OK;
@@ -69,7 +71,8 @@ ERR_READBUF:
 
 void hixo_destroy_socket(hixo_socket_t *p_sock)
 {
+    (void)shutdown(p_sock->m_fd, SHUT_RDWR);
     (void)close(p_sock->m_fd);
-    destroy_resource(&p_sock->m_readbuf);
-    destroy_resource(&p_sock->m_writebuf);
+    hixo_destroy_buffer(&p_sock->m_readbuf);
+    hixo_destroy_buffer(&p_sock->m_writebuf);
 }
