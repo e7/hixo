@@ -48,13 +48,16 @@ static hixo_event_module_ctx_t s_epoll_module_ctx = {
 };
 
 hixo_module_t g_epoll_module = {
-    HIXO_MODULE_EVENT,
     NULL,
     &epoll_init,
     NULL,
     NULL,
     &epoll_exit,
     NULL,
+
+    HIXO_MODULE_EVENT,
+    INIT_DLIST(g_epoll_module, m_node),
+
     &s_epoll_module_ctx,
 };
 
@@ -225,13 +228,8 @@ int epoll_process_events(int timer)
             p_epev->events |= HIXO_EVENT_IN | HIXO_EVENT_OUT;
         }
 
-        if (HIXO_EVENT_IN & p_epev->events) {
-            p_sock->m_readable = 1U;
-        }
-
-        if (HIXO_EVENT_OUT & p_epev->events) {
-            p_sock->m_writable = 1U;
-        }
+        p_sock->m_readable = (HIXO_EVENT_IN & p_epev->events) ? 1U : 0U;
+        p_sock->m_writable = (HIXO_EVENT_OUT & p_epev->events) ? 1U : 0U;
 
         if (p_sock->m_writable || p_sock->m_readable) {
             add_node(&g_rt_ctx.mp_posted_events, &p_sock->m_posted_node);
@@ -252,8 +250,8 @@ void epoll_exit(void)
     (void)close(s_epoll_private.m_epfd);
 
     if (NULL != s_epoll_module_ctx.mp_private) {
-        free(s_epoll_module_ctx.mp_private);
-        s_epoll_module_ctx.mp_private = NULL;
+        free(s_epoll_private.mp_epevs);
+        s_epoll_private.mp_epevs = NULL;
     }
 
     return;

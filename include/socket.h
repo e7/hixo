@@ -30,6 +30,10 @@
 
 typedef struct s_socket_t hixo_socket_t;
 struct s_socket_t {
+#if DEBUG_FLAG
+    hixo_resource_t *mp_belong;
+#endif // DEBUG_FLAG
+
     int m_fd;
     void (*mpf_read_handler)(hixo_socket_t *);
     void (*mpf_write_handler)(hixo_socket_t *);
@@ -41,7 +45,6 @@ struct s_socket_t {
     unsigned int m_stale : 1;
     unsigned int m_readable : 1;
     unsigned int m_writable : 1;
-    unsigned int m_closed : 1;
 };
 
 typedef enum {

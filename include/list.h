@@ -40,9 +40,10 @@ void add_node(list_t **pp_list, list_t *p_node)
 static inline
 int rm_node(list_t **pp_list, list_t *p_node)
 {
-    int removed = FALSE;
-    list_t **pp_curr = NULL;
+    int removed;
+    list_t **pp_curr;
 
+    removed = FALSE;
     pp_curr = pp_list;
     while (*pp_curr) {
         if (p_node == *pp_curr) {
@@ -58,6 +59,76 @@ int rm_node(list_t **pp_list, list_t *p_node)
 
     return removed;
 }
+
+
+// 栈
+#define push_node(pplist, p_node)   add_node(pplist, p_node)
+#define pop_node(pplist)            rm_node(pplist, *pplist)
+
+
+// 双链表
+typedef struct s_dlist_t dlist_t;
+struct s_dlist_t {
+    dlist_t *mp_next;
+    dlist_t *mp_prev;
+};
+#define INIT_DLIST(obj, node)       {&obj.node, &obj.node}
+#define DECLARE_DLIST(name)         dlist_t name = {&(name), &(name)}
+
+static inline
+void dlist_add_orig(dlist_t *p_new_node,
+                    dlist_t *p_prev_node,
+                    dlist_t *p_next_node)
+{
+    p_next_node->mp_prev = p_new_node;
+    p_new_node->mp_next = p_next_node;
+    p_new_node->mp_prev = p_prev_node;
+    p_prev_node->mp_next = p_new_node;
+}
+#define dlist_add_head(p_list, p_node)      dlist_add_orig((p_node), \
+                                                           (p_list), \
+                                                           (p_list)->mp_next)
+#define dlist_add_tail(p_list, p_node)      dlist_add_orig((p_node), \
+                                                           (p_list)->mp_prev, \
+                                                           (p_list))
+
+static inline
+int dlist_empty(dlist_t *p_list)
+{
+    return ((p_list->mp_prev == p_list->mp_next)
+                && (p_list == p_list->mp_prev));
+}
+
+static inline
+void dlist_del_orig(dlist_t *p_prev_node, dlist_t *p_next_node)
+{
+    p_next_node->mp_prev = p_prev_node;
+    p_prev_node->mp_next = p_next_node;
+}
+#define dlist_del(p_node)       dlist_del_orig((p_node)->mp_prev, \
+                                               (p_node)->mp_next)
+
+#define dlist_for_each_f(p_pos_node, p_list)    \
+            for(dlist_t *(p_pos_node) = (p_list)->mp_next; \
+                (p_pos_node) != (p_list); \
+                (p_pos_node) = (p_pos_node)->mp_next)
+#define dlist_for_each_p(p_pos_node, p_list)    \
+            for(dlist_t *(p_pos_node) = (p_list)->mp_prev; \
+                (p_pos_node) != (p_list); \
+                (p_pos_node) = (p_pos_node)->mp_prev)
+#define dlist_for_each_f_safe(p_pos_node, p_cur_next, p_list)   \
+            for (dlist_t *(p_pos_node) = (p_list)->mp_next, \
+                     *(p_cur_next) = (p_pos_node)->mp_next; \
+                 (p_pos_node) != (p_list); \
+                 (p_pos_node) = (p_cur_next), \
+                     (p_cur_next) = (p_pos_node)->mp_next)
+#define dlist_for_each_p_safe(p_pos_node, p_cur_prev, p_list)   \
+            for (dlist_t *(p_pos_node) = (p_list)->mp_prev, \
+                     *(p_cur_prev) = (p_pos_node)->mp_prev; \
+                 (p_pos_node) != (p_list); \
+                 (p_pos_node) = (p_cur_prev), \
+                     (p_cur_prev) = (p_pos_node)->mp_prev)
+
 #if __cplusplus
 }
 #endif // __cplusplus

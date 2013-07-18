@@ -32,13 +32,16 @@ typedef enum {
 } hixo_module_type_t;
 
 typedef struct {
-    hixo_module_type_t m_type;
     int (*mpf_init_master)(void);
     int (*mpf_init_worker)(void);
     int (*mpf_init_thread)(void);
     void(*mpf_exit_thread)(void);
     void (*mpf_exit_worker)(void);
     void (*mpf_exit_master)(void);
+
+    hixo_module_type_t m_type;
+    dlist_t m_node;
+
     void *mp_ctx;
 } hixo_module_t;
 

@@ -19,7 +19,7 @@
 
 #define DAEMON                  FALSE
 #define WORKER_PROCESSES        1
-#define MAX_CONNECTIONS         512
+#define MAX_CONNECTIONS         1
 #define TIMER_RESOLUTION        1000
 #define CONNECTION_TIME_OUT     60
 
@@ -32,10 +32,6 @@ static hixo_listen_conf_t const S_SRV_ADDRS[] = {
 
 int create_conf(hixo_conf_t *p_conf)
 {
-    if (ARRAY_COUNT(S_SRV_ADDRS) > MAX_CONNECTIONS) {
-        return HIXO_ERROR;
-    }
-
     p_conf->mppc_srv_addrs
         = (hixo_listen_conf_t const **)
         calloc(ARRAY_COUNT(S_SRV_ADDRS) + 1,

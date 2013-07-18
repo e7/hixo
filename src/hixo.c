@@ -22,12 +22,21 @@ hixo_sysconf_t  g_sysconf = {};
 hixo_rt_context_t g_rt_ctx = {};
 
 // 模块数组
+typedef enum {
+    HIXO_STAGE_MASTER = 0xe78f8a,
+    HIXO_STAGE_WORKER,
+    HIXO_STAGE_THREAD,
+} hixo_stage_type_t;
+
 hixo_module_t *gap_modules[] = {
     &g_main_core_module,
     &g_event_core_module,
     &g_epoll_module,
     NULL,
 };
+DECLARE_DLIST(g_core_module_loaded_list);
+DECLARE_DLIST(g_event_module_loaded_list);
+DECLARE_DLIST(g_app_module_loaded_list);
 
 
 hixo_ps_status_t g_ps_status = {
@@ -63,12 +72,10 @@ static int event_loop(void)
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     hixo_event_module_ctx_t *p_ev_ctx = NULL;
 
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
-        if (HIXO_MODULE_EVENT != gap_modules[i]->m_type) {
-            continue;
-        }
+    dlist_for_each_f(p_pos_node, &g_event_module_loaded_list) {
+        hixo_module_t *p_mod = CONTAINER_OF(p_pos_node, hixo_module_t, m_node);
 
-        p_ev_ctx = (hixo_event_module_ctx_t *)gap_modules[i]->mp_ctx;
+        p_ev_ctx = (hixo_event_module_ctx_t *)p_mod->mp_ctx;
     }
 
     if (NULL == p_ev_ctx) {
@@ -77,15 +84,16 @@ static int event_loop(void)
 
     g_rt_ctx.mp_ctx = p_ev_ctx;
     while (TRUE) {
+        list_t *p_iter, *p_next_iter;
+
         rslt = (*p_ev_ctx->mpf_process_events)(p_conf->m_timer_resolution);
         if (-1 == rslt) {
             break;
         }
 
-        for (list_t *p_iter = g_rt_ctx.mp_posted_events;
-             NULL != p_iter;
-             p_iter = *(list_t **)p_iter)
-        {
+        p_iter = g_rt_ctx.mp_posted_events;
+        while (NULL != p_iter) {
+            p_next_iter = *(list_t **)p_iter;
             hixo_socket_t *p_sock = CONTAINER_OF(p_iter,
                                                  hixo_socket_t,
                                                  m_posted_node);
@@ -98,10 +106,8 @@ static int event_loop(void)
             }
             assert(rm_node(&g_rt_ctx.mp_posted_events,
                            &p_sock->m_posted_node));
-            if (p_sock->m_closed) {
-                assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
-                free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
-            }
+
+            p_iter = p_next_iter;
         }
     }
 
@@ -117,41 +123,105 @@ ERR_NO_EVENT_MODULE:
 }
 
 
-
-int init_worker(hixo_module_type_t mod_type)
+int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
 {
-    int rslt = HIXO_OK;
+    int rslt;
+    dlist_t *p_list = NULL;
 
+    switch (mod_type) {
+    case HIXO_MODULE_CORE:
+        p_list = &g_core_module_loaded_list;
+        break;
+
+    case HIXO_MODULE_EVENT:
+        p_list = &g_event_module_loaded_list;
+        break;
+
+    case HIXO_MODULE_APP:
+        p_list = &g_app_module_loaded_list;
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
+
+    rslt = HIXO_OK;
     for (int i = 0; NULL != gap_modules[i]; ++i) {
+        int (*pf_init)(void) = NULL;
+
         if (mod_type != gap_modules[i]->m_type) {
             continue;
         }
 
-        if (NULL == gap_modules[i]->mpf_init_worker) {
+        if (HIXO_STAGE_MASTER == stage) {
+            pf_init = gap_modules[i]->mpf_init_master;
+        } else if (HIXO_STAGE_WORKER == stage) {
+            pf_init = gap_modules[i]->mpf_init_worker;
+        } else if (HIXO_STAGE_THREAD == stage) {
+            pf_init = gap_modules[i]->mpf_init_thread;
+        } else {
+            assert(0);
+        }
+
+        if (NULL == pf_init) {
             continue;
         }
 
-        if (HIXO_ERROR == (*gap_modules[i]->mpf_init_worker)()) {
+        if (HIXO_ERROR == (pf_init)()) {
             rslt = HIXO_ERROR;
+
             break;
         }
+
+        dlist_add_head(p_list, &gap_modules[i]->m_node);
     }
 
     return rslt;
 }
 
-void exit_worker(hixo_module_type_t mod_type)
+void hixo_exit(hixo_stage_type_t stage, hixo_module_type_t mod_type)
 {
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
-        if (mod_type != gap_modules[i]->m_type) {
-            continue;
+    dlist_t *p_list = NULL;
+
+    switch (mod_type) {
+    case HIXO_MODULE_CORE:
+        p_list = &g_core_module_loaded_list;
+        break;
+
+    case HIXO_MODULE_EVENT:
+        p_list = &g_event_module_loaded_list;
+        break;
+
+    case HIXO_MODULE_APP:
+        p_list = &g_app_module_loaded_list;
+        break;
+
+    default:
+        assert(0);
+        break;
+    }
+
+    dlist_for_each_f_safe(p_pos_node, p_cur_next, p_list) {
+        void (*pf_exit)(void) = NULL;
+        hixo_module_t *p_mod = CONTAINER_OF(p_pos_node, hixo_module_t, m_node);
+
+        if (HIXO_STAGE_MASTER == stage) {
+            pf_exit = p_mod->mpf_exit_master;
+        } else if (HIXO_STAGE_WORKER == stage) {
+            pf_exit = p_mod->mpf_exit_worker;
+        } else if (HIXO_STAGE_THREAD == stage) {
+            pf_exit = p_mod->mpf_exit_thread;
+        } else {
+            assert(0);
         }
 
-        if (NULL == gap_modules[i]->mpf_exit_worker) {
+        if (NULL == pf_exit) {
             continue;
         }
+        (pf_exit)();
 
-        (*gap_modules[i]->mpf_exit_worker)();
+        dlist_del(p_pos_node);
     }
 }
 
@@ -166,15 +236,15 @@ static int worker_main(void)
 {
     int rslt;
 
-    rslt = init_worker(HIXO_MODULE_CORE);
+    rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_CORE;
     }
-    rslt = init_worker(HIXO_MODULE_EVENT);
+    rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_EVENT);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_EVENT;
     }
-    rslt = init_worker(HIXO_MODULE_APP);
+    rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_APP);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_APP;
     }
@@ -182,13 +252,13 @@ static int worker_main(void)
     rslt = event_loop();
 
     do {
-        exit_worker(HIXO_MODULE_APP);
+        hixo_exit(HIXO_STAGE_WORKER, HIXO_MODULE_APP);
 
 ERR_INIT_WORKER_APP:
-        exit_worker(HIXO_MODULE_EVENT);
+        hixo_exit(HIXO_STAGE_WORKER, HIXO_MODULE_EVENT);
 
 ERR_INIT_WORKER_EVENT:
-        exit_worker(HIXO_MODULE_CORE);
+        hixo_exit(HIXO_STAGE_WORKER, HIXO_MODULE_CORE);
 
 ERR_INIT_WORKER_CORE:
         break;
@@ -197,49 +267,12 @@ ERR_INIT_WORKER_CORE:
     return rslt;
 }
 
-int init_master(hixo_module_type_t mod_type)
-{
-    int rslt = HIXO_OK;
-
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
-        if (mod_type != gap_modules[i]->m_type) {
-            continue;
-        }
-
-        if (NULL == gap_modules[i]->mpf_init_master) {
-            continue;
-        }
-
-        if (HIXO_ERROR == (*gap_modules[i]->mpf_init_master)()) {
-            rslt = HIXO_ERROR;
-
-            break;
-        }
-    }
-
-    return rslt;
-}
-
-void exit_master(hixo_module_type_t mod_type)
-{
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
-        if (mod_type != gap_modules[i]->m_type) {
-            continue;
-        }
-
-        if (NULL == gap_modules[i]->mpf_exit_master) {
-            continue;
-        }
-        (*gap_modules[i]->mpf_exit_master)();
-    }
-}
-
 int hixo_main(void)
 {
     int rslt;
     hixo_conf_t *p_conf;
 
-    rslt = init_master(HIXO_MODULE_CORE);
+    rslt = hixo_init(HIXO_STAGE_MASTER, HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
         goto EXIT;
     }
@@ -268,15 +301,27 @@ int hixo_main(void)
     }
 
 EXIT:
-    exit_master(HIXO_MODULE_CORE);
+    hixo_exit(HIXO_STAGE_MASTER, HIXO_MODULE_CORE);
     return rslt;
 }
 
 int main(int argc, char *argv[])
 {
+    int rslt;
+
     if (HIXO_ERROR == hixo_get_sysconf()) {
-        return EXIT_FAILURE;
+        rslt = HIXO_ERROR;
+        goto ERR_SYSCONF;
     }
 
-    return (HIXO_OK == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
+    assert(dlist_empty(&g_core_module_loaded_list));
+    assert(dlist_empty(&g_event_module_loaded_list));
+    assert(dlist_empty(&g_app_module_loaded_list));
+    rslt = (HIXO_OK == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
+    assert(dlist_empty(&g_app_module_loaded_list));
+    assert(dlist_empty(&g_event_module_loaded_list));
+    assert(dlist_empty(&g_core_module_loaded_list));
+
+ERR_SYSCONF:
+    return rslt;
 }

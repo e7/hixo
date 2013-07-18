@@ -26,6 +26,7 @@
 #include <sys/shm.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <execinfo.h>
 
 #include <stdint.h>
 #include <stdlib.h>

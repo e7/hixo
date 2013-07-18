@@ -52,7 +52,6 @@ int hixo_create_socket(hixo_socket_t *p_sock,
     p_sock->m_stale = !p_sock->m_stale;
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
-    p_sock->m_closed = 0U;
 
     do {
         rslt = HIXO_OK;
@@ -67,6 +66,22 @@ ERR_READBUF:
     } while (0);
 
     return rslt;
+}
+
+int hixo_socket_unblock(hixo_socket_t *p_sock)
+{
+    int tmp_err;
+
+    errno = 0;
+    (void)unblocking_fd(p_sock->m_fd);
+    tmp_err = errno;
+    if (tmp_err) {
+        fprintf(stderr, "[ERROR] fcntl() failed: %d", tmp_err);
+
+        return HIXO_ERROR;
+    } else {
+        return HIXO_OK;
+    }
 }
 
 void hixo_destroy_socket(hixo_socket_t *p_sock)

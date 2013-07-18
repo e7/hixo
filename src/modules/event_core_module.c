@@ -30,10 +30,13 @@ static hixo_core_module_ctx_t s_event_core_ctx = {
 
 static void hixo_handle_close(hixo_socket_t *p_sock)
 {
-    hixo_destroy_socket(p_sock);
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
-    p_sock->m_closed = 1U;
+    hixo_destroy_socket(p_sock);
+    assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
+    free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
+
+    ++g_ps_status.m_power;
 }
 
 static void hixo_handle_read(hixo_socket_t *p_sock)
@@ -62,26 +65,31 @@ static void hixo_handle_read(hixo_socket_t *p_sock)
                            left_size,
                            0);
         tmp_err = errno;
-        if (tmp_err) {
+
+        if (recved_size > 0) {
+            //(void)fprintf(stderr, "%s\n", &p_buf[p_sock->m_readbuf.m_offset]);
+        } else if ((0 == recved_size) || (ECONNRESET == tmp_err)) {
+            hixo_handle_close(p_sock);
+            break;
+        } else {
             if (EAGAIN != tmp_err) {
                 (void)fprintf(stderr, "[ERROR] recv failed: %d\n", tmp_err);
             }
             p_sock->m_readable = 0U;
             break;
-        } else if (0 == recved_size) {
-            hixo_handle_close(p_sock);
-            break;
-        } else {
-            p_sock->m_readbuf.m_size += recved_size;
-
-            (void)fprintf(stderr, "%s\n", &p_buf[p_sock->m_readbuf.m_offset]);
         }
     }
 }
 
 static void hixo_handle_write(hixo_socket_t *p_sock)
 {
-    fprintf(stderr, "[INFO] handle write\n");
+    uint8_t const data[] = "HTTP/1.1 200 OK\r\n"
+                           "Server: hixo\r\n"
+                           "Content-Length: 13\r\n"
+                           "Content-Type: text/plain\r\n"
+                           "Connection: keep-alive\r\n\r\n"
+                           "hello, world!";
+    send(p_sock->m_fd, data, sizeof(data), 0);
 }
 
 static void hixo_handle_accept(hixo_socket_t *p_sock)
@@ -106,16 +114,12 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
             continue;
         }
 
-        errno = 0;
-        (void)unblocking_fd(fd);
-        tmp_err = errno;
-        if (tmp_err) {
-            (void)close(fd);
-            fprintf(stderr, "[ERROR] fcntl() failed: %d", tmp_err);
-            continue;
-        }
-
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
+
+#if DEBUG_FLAG
+
+#endif // DEBUG_FLAG
+
         assert(NULL != p_cmnct);
         if (HIXO_ERROR == hixo_create_socket(p_cmnct,
                                              fd,
@@ -124,7 +128,11 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
                                              &hixo_handle_write))
         {
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
-            (void)close(fd);
+            continue;
+        }
+
+        if (HIXO_ERROR == hixo_socket_unblock(fd)) {
+            free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
             continue;
         }
 
@@ -229,7 +237,8 @@ static int event_core_init_master(void)
     }
 
     if (HIXO_ERROR == create_resource(&g_rt_ctx.m_sockets_cache,
-                                      p_conf->m_max_connections,
+                                      p_conf->m_max_connections
+                                          + p_conf->m_nservers,
                                       sizeof(hixo_socket_t),
                                       OFFSET_OF(hixo_socket_t, m_node)))
     {
@@ -357,12 +366,15 @@ static void event_core_exit_worker(void)
 
 
 hixo_module_t g_event_core_module = {
-    HIXO_MODULE_CORE,
     &event_core_init_master,
     &event_core_init_worker,
     NULL,
     NULL,
     &event_core_exit_worker,
     &event_core_exit_master,
+
+    HIXO_MODULE_CORE,
+    INIT_DLIST(g_event_core_module, m_node),
+
     &s_event_core_ctx,
 };

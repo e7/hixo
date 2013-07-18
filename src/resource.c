@@ -40,6 +40,19 @@ int create_resource(hixo_resource_t *p_rsc,
 
         return HIXO_ERROR;
     }
+    (void)memset(p_rsc->mp_start, 0, count * elemt_size);
+
+#if DEBUG_FLAG
+    for (int i = 0; i < count; ++i) {
+        hixo_resource_t **pp_belong = NULL;
+
+        pp_belong = (hixo_resource_t **)(
+            ((uint8_t *)p_rsc->mp_start) + i * elemt_size
+        );
+        *pp_belong = p_rsc;
+    }
+#endif // DEBUG_FLAG
+
     p_rsc->mp_end = ((uint8_t *)p_rsc->mp_start) + count * elemt_size;
     p_rsc->m_offset = offset;
     p_rsc->mp_free_list = NULL;
@@ -55,8 +68,23 @@ int create_resource(hixo_resource_t *p_rsc,
     return HIXO_OK;
 }
 
+void prt_stack(void)
+{
+void *bt[20];
+     char **strings;
+     size_t sz;
+
+     sz = backtrace(bt, 20);
+      strings = backtrace_symbols(bt, sz);
+              for(int i = 0; i < sz; ++i)
+                              fprintf(stderr, "%s\n", strings[i]);
+}
 void *alloc_resource(hixo_resource_t *p_rsc)
 {
+#if DEBUG_FLAG
+    hixo_resource_t **pp_belong = NULL;
+#endif // DEBUG_FLAG
+
     list_t *p_node = NULL;
 
     if (NULL == p_rsc->mp_free_list) {
@@ -66,11 +94,21 @@ void *alloc_resource(hixo_resource_t *p_rsc)
     assert(rm_node(&p_rsc->mp_free_list, p_node));
     ++p_rsc->m_used;
 
+#if DEBUG_FLAG
+    pp_belong = (hixo_resource_t **)(((uint8_t *)p_node) - p_rsc->m_offset);
+    assert(*pp_belong == p_rsc);
+    *pp_belong = (hixo_resource_t *)((*(uintptr_t *)pp_belong) | 1);
+#endif // DEBUG_FLAG
+
     return ((uint8_t *)p_node) - p_rsc->m_offset;
 }
 
 void free_resource(hixo_resource_t *p_rsc, void *p_elemt)
 {
+#if DEBUG_FLAG
+    hixo_resource_t **pp_belong = (hixo_resource_t **)p_elemt;
+#endif // DEBUG_FLAG
+
     list_t *p_node = NULL;
 
     if (NULL == p_elemt) {
@@ -83,6 +121,12 @@ void free_resource(hixo_resource_t *p_rsc, void *p_elemt)
     p_node = (list_t *)(((uint8_t *)p_elemt) + p_rsc->m_offset);
     add_node(&p_rsc->mp_free_list, p_node);
     --p_rsc->m_used;
+
+#if DEBUG_FLAG
+    assert(((hixo_resource_t *)((*(uintptr_t *)pp_belong) & ~1)) == p_rsc);
+    assert((*(uintptr_t *)pp_belong) & 1);
+    *pp_belong = (hixo_resource_t *)((*(uintptr_t *)pp_belong) & ~1);
+#endif // DEBUG_FLAG
 
     return;
 
