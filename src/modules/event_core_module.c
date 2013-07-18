@@ -104,6 +104,11 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
     while (TRUE) {
         hixo_socket_t *p_cmnct = NULL;
 
+        if (g_ps_status.m_power <= 0) {
+            (void)fprintf(stderr, "[WARNING] no more power\n");
+            break;
+        }
+
         errno = 0;
         fd = accept(p_sock->m_fd, &client_addr, &len);
         tmp_err = errno;
@@ -115,12 +120,8 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         }
 
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
-
-#if DEBUG_FLAG
-
-#endif // DEBUG_FLAG
-
         assert(NULL != p_cmnct);
+
         if (HIXO_ERROR == hixo_create_socket(p_cmnct,
                                              fd,
                                              HIXO_CMNCT_SOCKET,
@@ -131,7 +132,8 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
             continue;
         }
 
-        if (HIXO_ERROR == hixo_socket_unblock(fd)) {
+        if (HIXO_ERROR == hixo_socket_unblock(p_cmnct)) {
+            hixo_destroy_socket(p_cmnct);
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
             continue;
         }
@@ -139,7 +141,6 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         if (HIXO_ERROR == (*p_ctx->mpf_add_event)(p_cmnct)) {
             hixo_destroy_socket(p_cmnct);
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
-            (void)close(fd);
             continue;
         }
 
