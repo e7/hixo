@@ -83,13 +83,23 @@ static void hixo_handle_read(hixo_socket_t *p_sock)
 
 static void hixo_handle_write(hixo_socket_t *p_sock)
 {
+    intptr_t tmp_err;
+    ssize_t sent_size;
     uint8_t const data[] = "HTTP/1.1 200 OK\r\n"
                            "Server: hixo\r\n"
                            "Content-Length: 13\r\n"
                            "Content-Type: text/plain\r\n"
                            "Connection: keep-alive\r\n\r\n"
                            "hello, world!";
-    send(p_sock->m_fd, data, sizeof(data), 0);
+
+    errno = 0;
+    sent_size = send(p_sock->m_fd, data, sizeof(data), 0);
+    tmp_err = errno;
+    if (sizeof(data) == sent_size) {
+        (void)shutdown(p_sock->m_fd, SHUT_WR);
+
+        return;
+    }
 }
 
 static void hixo_handle_accept(hixo_socket_t *p_sock)
