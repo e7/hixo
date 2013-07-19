@@ -129,11 +129,6 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
     while (TRUE) {
         hixo_socket_t *p_cmnct = NULL;
 
-        if (g_ps_status.m_power <= 0) {
-            (void)fprintf(stderr, "[WARNING] no more power\n");
-            break;
-        }
-
         errno = 0;
         fd = accept(p_sock->m_fd, &client_addr, &len);
         tmp_err = errno;
@@ -145,7 +140,10 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         }
 
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
-        assert(NULL != p_cmnct);
+        if (NULL == p_cmnct) {
+            (void)fprintf(stderr, "[WARNING] no more power\n");
+            break;
+        }
 
         if (HIXO_ERROR == hixo_create_socket(p_cmnct,
                                              fd,
