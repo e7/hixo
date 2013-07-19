@@ -39,6 +39,7 @@ static void hixo_handle_close(hixo_socket_t *p_sock)
     ++g_ps_status.m_power;
 }
 
+extern void syn_send(hixo_socket_t *p_sock);
 static void hixo_handle_read(hixo_socket_t *p_sock)
 {
     while (p_sock->m_readable) {
@@ -76,12 +77,13 @@ static void hixo_handle_read(hixo_socket_t *p_sock)
                 (void)fprintf(stderr, "[ERROR] recv failed: %d\n", tmp_err);
             }
             p_sock->m_readable = 0U;
+            syn_send(p_sock);
             break;
         }
     }
 }
 
-static void hixo_handle_write(hixo_socket_t *p_sock)
+void syn_send(hixo_socket_t *p_sock)
 {
     intptr_t tmp_err;
     ssize_t sent_size;
@@ -92,14 +94,27 @@ static void hixo_handle_write(hixo_socket_t *p_sock)
                            "Connection: keep-alive\r\n\r\n"
                            "hello, world!";
 
-    errno = 0;
-    sent_size = send(p_sock->m_fd, data, sizeof(data), 0);
-    tmp_err = errno;
-    if (sizeof(data) == sent_size) {
-        (void)shutdown(p_sock->m_fd, SHUT_WR);
+    sent_size = 0;
+    while (sent_size < sizeof(data)) {
+        ssize_t tmp_sent;
 
-        return;
+        errno = 0;
+        tmp_sent = send(p_sock->m_fd, data, sizeof(data), 0);
+        tmp_err = errno;
+        if (tmp_err) {
+            return;
+        } else {
+            sent_size += tmp_sent;
+        }
     }
+    (void)shutdown(p_sock->m_fd, SHUT_WR);
+
+    return;
+}
+
+static void hixo_handle_write(hixo_socket_t *p_sock)
+{
+    return;
 }
 
 static void hixo_handle_accept(hixo_socket_t *p_sock)
