@@ -76,6 +76,13 @@ struct s_dlist_t {
 #define DECLARE_DLIST(name)         dlist_t name = {&(name), &(name)}
 
 static inline
+void dlist_init(dlist_t *p_list)
+{
+    p_list->mp_next = p_list;
+    p_list->mp_prev = p_list;
+}
+
+static inline
 void dlist_add_orig(dlist_t *p_new_node,
                     dlist_t *p_prev_node,
                     dlist_t *p_next_node)
