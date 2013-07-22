@@ -138,7 +138,12 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         if (ECONNABORTED == tmp_err) {
             continue;
         }
+        if (tmp_err) {
+            (void)fprintf(stderr, "[ERROR] accept() failed: %d\n", tmp_err);
+            break;
+        }
 
+        assert(fd >= 0);
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
         if (NULL == p_cmnct) {
             (void)fprintf(stderr, "[WARNING] no more power\n");

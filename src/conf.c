@@ -22,6 +22,7 @@
 #define MAX_CONNECTIONS         10000
 #define TIMER_RESOLUTION        1000
 #define CONNECTION_TIME_OUT     60
+#define LINGER_TIME_OUT         10
 
 static hixo_listen_conf_t const S_SRV_ADDRS[] = {
     {INADDR_ANY, 8001, 0},

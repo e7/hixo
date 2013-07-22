@@ -76,7 +76,10 @@ int hixo_socket_unblock(hixo_socket_t *p_sock)
     (void)unblocking_fd(p_sock->m_fd);
     tmp_err = errno;
     if (tmp_err) {
-        fprintf(stderr, "[ERROR] fcntl() failed: %d", tmp_err);
+        fprintf(stderr,
+                "[ERROR] fcntl(%d) failed: %d\n",
+                p_sock->m_fd,
+                tmp_err);
 
         return HIXO_ERROR;
     } else {
