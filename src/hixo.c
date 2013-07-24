@@ -314,13 +314,19 @@ int main(int argc, char *argv[])
         goto ERR_SYSCONF;
     }
 
+#if DEBUG_FLAG
     assert(dlist_empty(&g_core_module_loaded_list));
     assert(dlist_empty(&g_event_module_loaded_list));
     assert(dlist_empty(&g_app_module_loaded_list));
+#endif // DEBUG_FLAG
+
     rslt = (HIXO_OK == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
+
+#if DEBUG_FLAG
     assert(dlist_empty(&g_app_module_loaded_list));
     assert(dlist_empty(&g_event_module_loaded_list));
     assert(dlist_empty(&g_core_module_loaded_list));
+#endif // DEBUG_FLAG
 
 ERR_SYSCONF:
     return rslt;

@@ -89,7 +89,6 @@ int hixo_socket_unblock(hixo_socket_t *p_sock)
 
 void hixo_destroy_socket(hixo_socket_t *p_sock)
 {
-    (void)shutdown(p_sock->m_fd, SHUT_RDWR);
     (void)close(p_sock->m_fd);
     hixo_destroy_buffer(&p_sock->m_readbuf);
     hixo_destroy_buffer(&p_sock->m_writebuf);

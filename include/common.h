@@ -22,8 +22,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-#include <sys/socket.h>
 #include <sys/epoll.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
 #include <sys/shm.h>
 #include <arpa/inet.h>
 #include <errno.h>

@@ -32,6 +32,7 @@ static void hixo_handle_close(hixo_socket_t *p_sock)
 {
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
+
     hixo_destroy_socket(p_sock);
     assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
     free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
@@ -107,6 +108,7 @@ void syn_send(hixo_socket_t *p_sock)
             sent_size += tmp_sent;
         }
     }
+
     (void)shutdown(p_sock->m_fd, SHUT_WR);
 
     return;
