@@ -29,8 +29,9 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
-#include <errno.h>
 #include <execinfo.h>
+#include <sched.h>
+#include <errno.h>
 
 #include <stdint.h>
 #include <stdlib.h>

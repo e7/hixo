@@ -50,7 +50,9 @@ static int hixo_get_sysconf(void)
     struct rlimit rlmt;
     int *p_file_no = (int *)&g_sysconf.M_MAX_FILE_NO;
     int *p_page_size = (int *)&g_sysconf.M_PAGE_SIZE;
+    int *p_ncpus = (int *)&g_sysconf.M_NCPUS;
 
+    // MAX_FILE_NO
     errno = 0;
     rslt = getrlimit(RLIMIT_NOFILE, &rlmt);
     tmp_err = (-1 == rslt) ? errno : 0;
@@ -61,7 +63,11 @@ static int hixo_get_sysconf(void)
     }
     *p_file_no = rlmt.rlim_cur;
 
+    // PAGE_SIZE
     *p_page_size = PAGE_SIZE;
+
+    // NCPUS
+    *p_ncpus = (int)sysconf(_SC_NPROCESSORS_ONLN);
 
     return HIXO_OK;
 }
@@ -232,9 +238,17 @@ static int master_main(void)
     return HIXO_OK;
 }
 
-static int worker_main(void)
+static int worker_main(int cpu_id)
 {
     int rslt;
+    cpu_set_t cpuset;
+
+    // 绑定CPU
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+    if (-1 == sched_setaffinity(0, sizeof(cpu_set_t), &cpuset)) {
+        (void)fprintf(stderr, "[WARNING] sched_setaffinity failed\n");
+    }
 
     rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
@@ -270,6 +284,7 @@ ERR_INIT_WORKER_CORE:
 int hixo_main(void)
 {
     int rslt;
+    int cpu_id = -1;
     hixo_conf_t *p_conf;
 
     rslt = hixo_init(HIXO_STAGE_MASTER, HIXO_MODULE_CORE);
@@ -288,6 +303,7 @@ int hixo_main(void)
             return -1;
         } else if (0 == cpid) {
             g_ps_status.m_master = FALSE;
+            cpu_id = i % g_sysconf.M_NCPUS;
             break;
         } else {
             g_ps_status.m_master = TRUE;
@@ -297,7 +313,7 @@ int hixo_main(void)
     if (g_ps_status.m_master) {
         rslt = master_main();
     } else {
-        rslt = worker_main();
+        rslt = worker_main(cpu_id);
     }
 
 EXIT:

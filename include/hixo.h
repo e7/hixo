@@ -48,6 +48,7 @@ typedef struct {
 typedef struct {
     int const M_PAGE_SIZE;
     int const M_MAX_FILE_NO;
+    int const M_NCPUS;
 } hixo_sysconf_t;
 
 typedef struct {
