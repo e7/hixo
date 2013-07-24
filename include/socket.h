@@ -57,6 +57,7 @@ extern int hixo_create_socket(hixo_socket_t *p_sock,
                               hixo_sock_type_t type,
                               void (*pf_read_handler)(hixo_socket_t *),
                               void (*pf_write_handler)(hixo_socket_t *));
-extern int hixo_socket_unblock(hixo_socket_t *p_sock);
+extern void hixo_socket_nodelay(hixo_socket_t *p_sock);
+extern void hixo_socket_unblock(hixo_socket_t *p_sock);
 extern void hixo_destroy_socket(hixo_socket_t *p_sock);
 #endif // __SOCKET_H__

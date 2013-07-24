@@ -68,7 +68,26 @@ ERR_READBUF:
     return rslt;
 }
 
-int hixo_socket_unblock(hixo_socket_t *p_sock)
+void hixo_socket_nodelay(hixo_socket_t *p_sock)
+{
+    int tmp_err;
+    int tcp_nodelay = 1;
+
+    errno = 0;
+    (void)setsockopt(p_sock->m_fd,
+                     IPPROTO_TCP,
+                     TCP_NODELAY,
+                     &tcp_nodelay,
+                     sizeof(tcp_nodelay));
+    tmp_err = errno;
+    if (tmp_err) {
+        (void)fprintf(stderr, "[WARNING] tcp_nodelay failed: %d\n", tmp_err);
+    }
+
+    return;
+}
+
+void hixo_socket_unblock(hixo_socket_t *p_sock)
 {
     int tmp_err;
 
@@ -77,14 +96,12 @@ int hixo_socket_unblock(hixo_socket_t *p_sock)
     tmp_err = errno;
     if (tmp_err) {
         fprintf(stderr,
-                "[ERROR] fcntl(%d) failed: %d\n",
+                "[WARNING] fcntl(%d) failed: %d\n",
                 p_sock->m_fd,
                 tmp_err);
-
-        return HIXO_ERROR;
-    } else {
-        return HIXO_OK;
     }
+
+    return;
 }
 
 void hixo_destroy_socket(hixo_socket_t *p_sock)

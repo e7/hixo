@@ -40,7 +40,7 @@ static void hixo_handle_close(hixo_socket_t *p_sock)
     ++g_ps_status.m_power;
 }
 
-extern void syn_send(hixo_socket_t *p_sock);
+extern void test_syn_send(hixo_socket_t *p_sock);
 static void hixo_handle_read(hixo_socket_t *p_sock)
 {
     while (p_sock->m_readable) {
@@ -69,7 +69,7 @@ static void hixo_handle_read(hixo_socket_t *p_sock)
         tmp_err = errno;
 
         if (recved_size > 0) {
-            //(void)fprintf(stderr, "%s\n", &p_buf[p_sock->m_readbuf.m_offset]);
+            continue;
         } else if ((0 == recved_size) || (ECONNRESET == tmp_err)) {
             hixo_handle_close(p_sock);
             break;
@@ -78,29 +78,42 @@ static void hixo_handle_read(hixo_socket_t *p_sock)
                 (void)fprintf(stderr, "[ERROR] recv failed: %d\n", tmp_err);
             }
             p_sock->m_readable = 0U;
-            syn_send(p_sock);
+            test_syn_send(p_sock);
             break;
         }
     }
 }
 
-void syn_send(hixo_socket_t *p_sock)
+void test_syn_send(hixo_socket_t *p_sock)
 {
     intptr_t tmp_err;
     ssize_t sent_size;
-    uint8_t const data[] = "HTTP/1.1 200 OK\r\n"
-                           "Server: hixo\r\n"
-                           "Content-Length: 13\r\n"
-                           "Content-Type: text/plain\r\n"
-                           "Connection: keep-alive\r\n\r\n"
-                           "hello, world!";
+    struct iovec iovs[2];
+    uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
+                          "Server: hixo\r\n"
+                          "Content-Length: 174\r\n"
+                          "Content-Type: text/html\r\n"
+                          "Connection: keep-alive\r\n\r\n";
+    uint8_t data_body[] = "<!DOCTYPE html>\r\n"
+                          "<html>\r\n"
+                          "<head>\r\n"
+                          "<title>welcome to hixo</title>\r\n"
+                          "</head>\r\n"
+                          "<body bgcolor=\"white\" text=\"black\">\r\n"
+                          "<center><h1>welcome to hixo!</h1></center>\r\n"
+                          "</body>\r\n"
+                          "</html>\r\n";
 
     sent_size = 0;
-    while (sent_size < sizeof(data)) {
+    iovs[0].iov_base = data_head;
+    iovs[0].iov_len = sizeof(data_head);
+    iovs[1].iov_base = data_body;
+    iovs[1].iov_len = sizeof(data_body);
+    while (sent_size < sizeof(data_head) + sizeof(data_body)) {
         ssize_t tmp_sent;
 
         errno = 0;
-        tmp_sent = send(p_sock->m_fd, data, sizeof(data), 0);
+        tmp_sent = writev(p_sock->m_fd, iovs, 2);
         tmp_err = errno;
         if (tmp_err) {
             return;
@@ -162,11 +175,8 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
             continue;
         }
 
-        if (HIXO_ERROR == hixo_socket_unblock(p_cmnct)) {
-            hixo_destroy_socket(p_cmnct);
-            free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
-            continue;
-        }
+        hixo_socket_unblock(p_cmnct);
+        hixo_socket_nodelay(p_cmnct);
 
         if (HIXO_ERROR == (*p_ctx->mpf_add_event)(p_cmnct)) {
             hixo_destroy_socket(p_cmnct);
