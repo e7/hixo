@@ -37,7 +37,7 @@ static void hixo_handle_close(hixo_socket_t *p_sock)
     assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
     free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
 
-    ++g_ps_status.m_power;
+    ++gp_ps_info->m_power;
 }
 
 extern void test_syn_send(hixo_socket_t *p_sock);
@@ -186,7 +186,7 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
 
         add_node(&g_rt_ctx.mp_connections, &p_cmnct->m_node);
 
-        --g_ps_status.m_power;
+        --gp_ps_info->m_power;
     }
 
     return;
@@ -323,9 +323,6 @@ static int event_core_init_master(void)
     if (0 == valid_sockets) {
         goto ERR_CREATE_LISTENERS;
     }
-
-    g_ps_status.m_power = p_conf->m_max_connections
-                                 - (p_conf->m_max_connections / 8);
 
     do {
         fprintf(stderr, "[INFO] count of listeners: %d\n", valid_sockets);

@@ -49,6 +49,7 @@ typedef struct {
     int const M_PAGE_SIZE;
     int const M_MAX_FILE_NO;
     int const M_NCPUS;
+    int const M_MAX_PSS;
 } hixo_sysconf_t;
 
 typedef struct {
@@ -62,12 +63,23 @@ typedef struct {
 } hixo_rt_context_t;
 
 typedef struct {
-    int m_master;
+    pid_t m_pid;
     int m_power;
-} hixo_ps_status_t;
+    int m_tunnel[2];
+} hixo_ps_info_t;
+
+typedef enum {
+    HIXO_STATUS_RUNNING = 0xe78f8a,
+    HIXO_STATUS_QUIT,
+    HIXO_STATUS_CHILD,
+    HIXO_STATUS_INT,
+    HIXO_STATUS_HUP,
+} hixo_status_t;
 
 
 extern hixo_sysconf_t g_sysconf;
 extern hixo_rt_context_t g_rt_ctx;
-extern hixo_ps_status_t g_ps_status;
+extern hixo_ps_info_t ga_pss_info[];
+extern hixo_ps_info_t *gp_ps_info;
+extern hixo_status_t g_status;
 #endif // __HIXO_H__

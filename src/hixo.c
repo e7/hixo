@@ -18,6 +18,9 @@
 #include "event_module.h"
 
 
+#define HIXO_MAX_PSS            1024
+
+
 hixo_sysconf_t  g_sysconf = {};
 hixo_rt_context_t g_rt_ctx = {};
 
@@ -39,9 +42,10 @@ DECLARE_DLIST(g_event_module_loaded_list);
 DECLARE_DLIST(g_app_module_loaded_list);
 
 
-hixo_ps_status_t g_ps_status = {
-    TRUE,
-};
+hixo_ps_info_t ga_pss_info[HIXO_MAX_PSS];
+hixo_ps_info_t *gp_ps_info = NULL;
+hixo_status_t g_status = HIXO_STATUS_RUNNING;
+int g_child_count = 0;
 
 static int hixo_get_sysconf(void)
 {
@@ -231,24 +235,83 @@ void hixo_exit(hixo_stage_type_t stage, hixo_module_type_t mod_type)
     }
 }
 
+void sig_child_handler(int signo)
+{
+    g_status = HIXO_STATUS_CHILD;
+}
+
+void sig_int_handler(int signo)
+{
+    printf("sigint\n");
+}
+
 static int master_main(void)
 {
-    sleep(-1);
+    sigset_t old_mask;
+    sigset_t filled_mask;
+    sigset_t cmd_mask;
+    struct sigaction sa;
+
+    (void)sigemptyset(&old_mask);
+    (void)sigfillset(&filled_mask);
+    (void)sigfillset(&cmd_mask);
+
+    (void)sigprocmask(SIG_SETMASK, &filled_mask, &old_mask);
+    sa.sa_handler = &sig_child_handler;
+    sa.sa_mask = filled_mask;
+    sa.sa_flags = 0;
+    if (-1 == sigaction(SIGCHLD, &sa, NULL)) {
+        return HIXO_ERROR;
+    }
+
+    sa.sa_handler = &sig_int_handler;
+    sa.sa_mask = filled_mask;
+    sa.sa_flags = 0;
+    if (-1 == sigaction(SIGINT, &sa, NULL)) {
+        return HIXO_ERROR;
+    }
+
+    (void)sigdelset(&cmd_mask, SIGCHLD);
+    (void)sigdelset(&cmd_mask, SIGQUIT);
+    (void)sigdelset(&cmd_mask, SIGINT);
+    (void)sigdelset(&cmd_mask, SIGHUP);
+
+    while (g_child_count) {
+        (void)sigsuspend(&cmd_mask);
+        switch (g_status) {
+        case HIXO_STATUS_RUNNING:
+            break;
+        case HIXO_STATUS_CHILD:
+            {
+                pid_t cpid;
+                int status;
+
+                cpid = waitpid(-1, &status, WNOHANG);
+                if (!WIFEXITED(status)) {
+                    (void)fprintf(stderr,
+                                  "[WARNING] worker process %d "
+                                      "exit unnormally\n",
+                                  cpid);
+                }
+                --g_child_count;
+                break;
+            }
+        case HIXO_STATUS_QUIT:
+            {
+            }
+        default:
+            assert(0);
+            break;
+        }
+    }
+    (void)sigprocmask(SIG_SETMASK, &old_mask, NULL);
 
     return HIXO_OK;
 }
 
-static int worker_main(int cpu_id)
+static int worker_main_core(void)
 {
     int rslt;
-    cpu_set_t cpuset;
-
-    // 绑定CPU
-    CPU_ZERO(&cpuset);
-    CPU_SET(cpu_id, &cpuset);
-    if (-1 == sched_setaffinity(0, sizeof(cpu_set_t), &cpuset)) {
-        (void)fprintf(stderr, "[WARNING] sched_setaffinity failed\n");
-    }
 
     rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
@@ -281,6 +344,41 @@ ERR_INIT_WORKER_CORE:
     return rslt;
 }
 
+void sig_int_handler_worker(int signo)
+{
+}
+
+static int worker_main(int cpu_id)
+{
+    int rslt;
+    cpu_set_t cpuset;
+    sigset_t filled_mask;
+    struct sigaction sa;
+
+    // 绑定CPU
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+    if (-1 == sched_setaffinity(0, sizeof(cpu_set_t), &cpuset)) {
+        (void)fprintf(stderr, "[WARNING] sched_setaffinity failed\n");
+    }
+
+    (void)sigfillset(&filled_mask);
+    sa.sa_mask = filled_mask;
+    sa.sa_flags = 0;
+    sa.sa_handler = &sig_int_handler_worker;
+    if (-1 == sigaction(SIGINT, &sa, NULL)) {
+        rslt = HIXO_ERROR;
+        goto EXIT;
+    }
+
+    while (TRUE) {
+        rslt = worker_main_core();
+    }
+
+EXIT:
+    return rslt;
+}
+
 int hixo_main(void)
 {
     int rslt;
@@ -292,28 +390,57 @@ int hixo_main(void)
         goto EXIT;
     }
 
+    p_conf = g_rt_ctx.mp_conf;
+
     if (p_conf->m_daemon) {
     }
 
     // 分裂进程
-    p_conf = g_rt_ctx.mp_conf;
+    assert(p_conf->m_worker_processes < HIXO_MAX_PSS);
     for (int i = 0; i < p_conf->m_worker_processes; ++i) {
+        if (-1 == socketpair(AF_UNIX,
+                             SOCK_STREAM,
+                             0,
+                             ga_pss_info[i].m_tunnel))
+        {
+            (void)fprintf(stderr, "[ERROR] socketpair() failed\n");
+            break;
+        }
+
         pid_t cpid = fork();
         if (-1 == cpid) {
-            return -1;
+            (void)fprintf(stderr, "[ERROR] fork() failed\n");
+            break;
         } else if (0 == cpid) {
-            g_ps_status.m_master = FALSE;
             cpu_id = i % g_sysconf.M_NCPUS;
+
+            gp_ps_info = &ga_pss_info[i];
+            ga_pss_info[i].m_pid = getpid();
+            gp_ps_info->m_power = p_conf->m_max_connections
+                                      - (p_conf->m_max_connections / 8);
+
             break;
         } else {
-            g_ps_status.m_master = TRUE;
+            ++g_child_count;
+
+            assert(NULL == gp_ps_info);
+            ga_pss_info[i].m_pid = cpid;
+            continue;
         }
     }
 
-    if (g_ps_status.m_master) {
-        rslt = master_main();
-    } else {
+    if (NULL != gp_ps_info) {
+        (void)close(gp_ps_info->m_tunnel[0]);
         rslt = worker_main(cpu_id);
+        (void)close(gp_ps_info->m_tunnel[1]);
+    } else {
+        for (int i = 0; i < p_conf->m_worker_processes; ++i) {
+            (void)close(ga_pss_info[i].m_tunnel[1]);
+        }
+        rslt = master_main();
+        for (int i = 0; i < p_conf->m_worker_processes; ++i) {
+            (void)close(ga_pss_info[i].m_tunnel[0]);
+        }
     }
 
 EXIT:

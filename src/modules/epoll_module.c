@@ -141,7 +141,6 @@ int epoll_del_event(hixo_socket_t *p_sock)
                     p_sock->m_fd,
                     &epev);
     tmp_err = errno;
-    tmp_err = errno;
     if ((!tmp_err) || (ENOENT == tmp_err)) {
         rslt = HIXO_OK;
     } else {
@@ -159,12 +158,13 @@ int epoll_process_events(int timer)
     int tmp_err = 0;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
-    if ((g_ps_status.m_power > 0) && spinlock_try(g_rt_ctx.mp_accept_lock)) {
+    if ((gp_ps_info->m_power > 0) && spinlock_try(g_rt_ctx.mp_accept_lock)) {
         s_epoll_private.m_hold_lock = TRUE;
     } else {
         s_epoll_private.m_hold_lock = FALSE;
     }
 
+    // 添加监听套接字事件监视
     if (s_epoll_private.m_hold_lock) {
         for (int i = 0; i < p_conf->m_nservers; ++i) {
             assert(0 == (((uintptr_t)g_rt_ctx.mpp_listeners[i]) & 1));
@@ -183,8 +183,9 @@ int epoll_process_events(int timer)
                          s_epoll_private.mp_epevs,
                          p_conf->m_max_connections,
                          timer);
-    tmp_err = (-1 == nevents) ? errno : 0;
+    tmp_err = errno;
 
+    // 清除监听套接字事件监视
     if (s_epoll_private.m_hold_lock) {
         for (int i = 0; i < p_conf->m_nservers; ++i) {
             if (((uintptr_t)g_rt_ctx.mpp_listeners[i]) & 1) {
@@ -201,10 +202,11 @@ int epoll_process_events(int timer)
 
     if (tmp_err) {
         if (EINTR == tmp_err) {
+            (void)fprintf(stderr, "[INFO] epoll_wait interupted\n");
             goto EXIT;
         } else {
             rslt = HIXO_ERROR;
-            fprintf(stderr, "[ERROR] epoll_wait failed: %d\n", tmp_err);
+            (void)fprintf(stderr, "[ERROR] epoll_wait failed: %d\n", tmp_err);
             goto EXIT;
         }
     }
