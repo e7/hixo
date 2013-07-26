@@ -70,15 +70,21 @@ static void hixo_handle_read(hixo_socket_t *p_sock)
 
         if (recved_size > 0) {
             continue;
-        } else if ((0 == recved_size) || (ECONNRESET == tmp_err)) {
+        } else if (0 == recved_size) {
             hixo_handle_close(p_sock);
             break;
         } else {
-            if (EAGAIN != tmp_err) {
-                (void)fprintf(stderr, "[ERROR] recv failed: %d\n", tmp_err);
+            if ((ECONNRESET == tmp_err) || (p_sock->m_closed)) {
+                hixo_handle_close(p_sock);
+            } else {
+                if (EAGAIN != tmp_err) {
+                    (void)fprintf(stderr,
+                                  "[ERROR] recv failed: %d\n",
+                                  tmp_err);
+                }
+                p_sock->m_readable = 0U;
+                test_syn_send(p_sock);
             }
-            p_sock->m_readable = 0U;
-            test_syn_send(p_sock);
             break;
         }
     }
@@ -123,6 +129,7 @@ void test_syn_send(hixo_socket_t *p_sock)
     }
 
     (void)shutdown(p_sock->m_fd, SHUT_WR);
+    p_sock->m_closed = 1U;
 
     return;
 }
