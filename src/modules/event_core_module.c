@@ -30,9 +30,12 @@ static hixo_core_module_ctx_t s_event_core_ctx = {
 
 static void hixo_handle_close(hixo_socket_t *p_sock)
 {
+    hixo_event_module_ctx_t *p_ctx = g_rt_ctx.mp_ctx;
+
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
 
+    (*p_ctx->mpf_del_event)(p_sock);
     hixo_destroy_socket(p_sock);
     assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
     free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
