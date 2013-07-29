@@ -154,27 +154,30 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
     while (TRUE) {
         hixo_socket_t *p_cmnct = NULL;
 
-        errno = 0;
-        fd = accept(p_sock->m_fd, &client_addr, &len);
-        tmp_err = errno;
-        if ((EAGAIN == tmp_err) || (EWOULDBLOCK == tmp_err)) {
-            break;
-        }
-        if (ECONNABORTED == tmp_err) {
-            continue;
-        }
-        if (tmp_err) {
-            (void)fprintf(stderr, "[ERROR] accept() failed: %d\n", tmp_err);
-            break;
-        }
-
-        assert(fd >= 0);
         p_cmnct = alloc_resource(&g_rt_ctx.m_sockets_cache);
         if (NULL == p_cmnct) {
             (void)fprintf(stderr, "[WARNING] no more power\n");
             break;
         }
 
+        errno = 0;
+        fd = accept(p_sock->m_fd, &client_addr, &len);
+        tmp_err = errno;
+        if (tmp_err) {
+            free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
+        }
+        if ((EAGAIN == tmp_err) || (EWOULDBLOCK == tmp_err)) {
+            break;
+        } else if (ECONNABORTED == tmp_err) {
+            continue;
+        } else if (tmp_err) {
+            (void)fprintf(stderr, "[ERROR] accept() failed: %d\n", tmp_err);
+            break;
+        } else {
+            do_nothing();
+        }
+
+        assert(fd >= 0);
         if (HIXO_ERROR == hixo_create_socket(p_cmnct,
                                              fd,
                                              HIXO_CMNCT_SOCKET,

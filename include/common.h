@@ -50,6 +50,8 @@ typedef volatile uintptr_t atomic_t;
 #define FALSE           0
 #define TRUE            (!FALSE)
 
+#define do_nothing()    do {} while (0)
+
 #define ARRAY_COUNT(a)      (sizeof(a) / sizeof(a[0]))
 #define OFFSET_OF(s, m)     ((size_t)&(((s *)0)->m ))
 #define CONTAINER_OF(ptr, type, member)     \
