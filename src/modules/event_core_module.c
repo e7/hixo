@@ -14,23 +14,66 @@
 
 
 #include "conf.h"
+#include "hixo.h"
 #include "core_module.h"
 #include "event_module.h"
 
 
+static int event_loop(void);
+
 static struct {
     int m_shmid;
+    hixo_event_module_ctx_t *mp_ev_ctx;
 } s_event_core_private = {
     -1,
+    NULL,
 };
 
 static hixo_core_module_ctx_t s_event_core_ctx = {
+    &event_loop,
     &s_event_core_private,
 };
 
+int event_loop(void)
+{
+    int rslt;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
+    hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
+
+    while (TRUE) {
+        list_t *p_iter, *p_next_iter;
+
+        rslt = (*p_ev_ctx->mpf_process_events)(p_conf->m_timer_resolution);
+        if (-1 == rslt) {
+            break;
+        }
+
+        p_iter = g_rt_ctx.mp_posted_events;
+        while (NULL != p_iter) {
+            p_next_iter = *(list_t **)p_iter;
+            hixo_socket_t *p_sock = CONTAINER_OF(p_iter,
+                                                 hixo_socket_t,
+                                                 m_posted_node);
+
+            if (p_sock->m_readable) {
+                (*p_sock->mpf_read_handler)(p_sock);
+            }
+            if (p_sock->m_writable) {
+                (*p_sock->mpf_write_handler)(p_sock);
+            }
+            assert(rm_node(&g_rt_ctx.mp_posted_events,
+                           &p_sock->m_posted_node));
+
+            p_iter = p_next_iter;
+        }
+    }
+
+    return rslt;
+}
+
 static void hixo_handle_close(hixo_socket_t *p_sock)
 {
-    hixo_event_module_ctx_t *p_ctx = g_rt_ctx.mp_ctx;
+    hixo_event_module_ctx_t *p_ctx = s_event_core_private.mp_ev_ctx;
 
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
@@ -148,7 +191,7 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
     int tmp_err = 0;
     struct sockaddr client_addr;
     socklen_t len = 0;
-    hixo_event_module_ctx_t *p_ctx = g_rt_ctx.mp_ctx;
+    hixo_event_module_ctx_t *p_ctx = s_event_core_private.mp_ev_ctx;
 
     assert(NULL != p_ctx);
     while (TRUE) {
@@ -382,8 +425,8 @@ static void event_core_exit_master(void)
 
 static int event_core_init_worker(void)
 {
-    int rslt = HIXO_ERROR;
-    int tmp_err = 0;
+    int rslt;
+    int tmp_err;
 
     // 映射共享内存
     assert(-1 != s_event_core_private.m_shmid);
@@ -396,11 +439,36 @@ static int event_core_init_worker(void)
         goto ERR_SHMAT;
     }
 
+    // 选择事件模块
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        hixo_module_t *p_mod = gap_modules[i];
+
+        if (HIXO_MODULE_EVENT != p_mod->m_type) {
+            continue;
+        }
+
+        s_event_core_private.mp_ev_ctx = (hixo_event_module_ctx_t *)(
+                p_mod->mp_ctx
+        );
+        if (NULL != s_event_core_private.mp_ev_ctx) {
+            break;
+        }
+    }
+    if (NULL == s_event_core_private.mp_ev_ctx) {
+        fprintf(stderr, "[ERROR] no event module selected\n");
+        goto ERR_NO_EVENT_MODULE;
+    }
+
     do {
         rslt = HIXO_OK;
         break;
 
+ERR_NO_EVENT_MODULE:
+        (void)shmdt((void const *)g_rt_ctx.mp_accept_lock);
+        g_rt_ctx.mp_accept_lock = NULL;
+
 ERR_SHMAT:
+        rslt = HIXO_ERROR;
         break;
     } while (0);
 

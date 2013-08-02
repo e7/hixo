@@ -26,9 +26,9 @@ hixo_rt_context_t g_rt_ctx = {};
 
 // 模块数组
 typedef enum {
-    HIXO_STAGE_MASTER = 0xe78f8a,
-    HIXO_STAGE_WORKER,
-    HIXO_STAGE_THREAD,
+    HIXO_PHASE_MASTER = 0xe78f8a,
+    HIXO_PHASE_WORKER,
+    HIXO_PHASE_THREAD,
 } hixo_stage_type_t;
 
 hixo_module_t *gap_modules[] = {
@@ -37,9 +37,6 @@ hixo_module_t *gap_modules[] = {
     &g_epoll_module,
     NULL,
 };
-DECLARE_DLIST(g_core_module_loaded_list);
-DECLARE_DLIST(g_event_module_loaded_list);
-DECLARE_DLIST(g_app_module_loaded_list);
 
 
 hixo_ps_info_t ga_pss_info[HIXO_MAX_PSS];
@@ -76,85 +73,10 @@ static int hixo_get_sysconf(void)
     return HIXO_OK;
 }
 
-static int event_loop(void)
-{
-    int rslt;
-    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
-    hixo_event_module_ctx_t *p_ev_ctx = NULL;
-
-    dlist_for_each_f(p_pos_node, &g_event_module_loaded_list) {
-        hixo_module_t *p_mod = CONTAINER_OF(p_pos_node, hixo_module_t, m_node);
-
-        p_ev_ctx = (hixo_event_module_ctx_t *)p_mod->mp_ctx;
-    }
-
-    if (NULL == p_ev_ctx) {
-        goto ERR_NO_EVENT_MODULE;
-    }
-
-    g_rt_ctx.mp_ctx = p_ev_ctx;
-    while (TRUE) {
-        list_t *p_iter, *p_next_iter;
-
-        rslt = (*p_ev_ctx->mpf_process_events)(p_conf->m_timer_resolution);
-        if (-1 == rslt) {
-            break;
-        }
-
-        p_iter = g_rt_ctx.mp_posted_events;
-        while (NULL != p_iter) {
-            p_next_iter = *(list_t **)p_iter;
-            hixo_socket_t *p_sock = CONTAINER_OF(p_iter,
-                                                 hixo_socket_t,
-                                                 m_posted_node);
-
-            if (p_sock->m_readable) {
-                (*p_sock->mpf_read_handler)(p_sock);
-            }
-            if (p_sock->m_writable) {
-                (*p_sock->mpf_write_handler)(p_sock);
-            }
-            assert(rm_node(&g_rt_ctx.mp_posted_events,
-                           &p_sock->m_posted_node));
-
-            p_iter = p_next_iter;
-        }
-    }
-
-    do {
-        break;
-
-ERR_NO_EVENT_MODULE:
-        rslt = HIXO_ERROR;
-        break;
-    } while (0);
-
-    return rslt;
-}
-
 
 int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
 {
     int rslt;
-    dlist_t *p_list = NULL;
-
-    switch (mod_type) {
-    case HIXO_MODULE_CORE:
-        p_list = &g_core_module_loaded_list;
-        break;
-
-    case HIXO_MODULE_EVENT:
-        p_list = &g_event_module_loaded_list;
-        break;
-
-    case HIXO_MODULE_APP:
-        p_list = &g_app_module_loaded_list;
-        break;
-
-    default:
-        assert(0);
-        break;
-    }
 
     rslt = HIXO_OK;
     for (int i = 0; NULL != gap_modules[i]; ++i) {
@@ -164,11 +86,11 @@ int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
             continue;
         }
 
-        if (HIXO_STAGE_MASTER == stage) {
+        if (HIXO_PHASE_MASTER == stage) {
             pf_init = gap_modules[i]->mpf_init_master;
-        } else if (HIXO_STAGE_WORKER == stage) {
+        } else if (HIXO_PHASE_WORKER == stage) {
             pf_init = gap_modules[i]->mpf_init_worker;
-        } else if (HIXO_STAGE_THREAD == stage) {
+        } else if (HIXO_PHASE_THREAD == stage) {
             pf_init = gap_modules[i]->mpf_init_thread;
         } else {
             assert(0);
@@ -184,7 +106,6 @@ int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
             break;
         }
 
-        dlist_add_head(p_list, &gap_modules[i]->m_node);
     }
 
     return rslt;
@@ -192,35 +113,19 @@ int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
 
 void hixo_exit(hixo_stage_type_t stage, hixo_module_type_t mod_type)
 {
-    dlist_t *p_list = NULL;
-
-    switch (mod_type) {
-    case HIXO_MODULE_CORE:
-        p_list = &g_core_module_loaded_list;
-        break;
-
-    case HIXO_MODULE_EVENT:
-        p_list = &g_event_module_loaded_list;
-        break;
-
-    case HIXO_MODULE_APP:
-        p_list = &g_app_module_loaded_list;
-        break;
-
-    default:
-        assert(0);
-        break;
-    }
-
-    dlist_for_each_f_safe(p_pos_node, p_cur_next, p_list) {
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
         void (*pf_exit)(void) = NULL;
-        hixo_module_t *p_mod = CONTAINER_OF(p_pos_node, hixo_module_t, m_node);
+        hixo_module_t *p_mod = gap_modules[i];
 
-        if (HIXO_STAGE_MASTER == stage) {
+        if (mod_type != p_mod->m_type) {
+            continue;
+        }
+
+        if (HIXO_PHASE_MASTER == stage) {
             pf_exit = p_mod->mpf_exit_master;
-        } else if (HIXO_STAGE_WORKER == stage) {
+        } else if (HIXO_PHASE_WORKER == stage) {
             pf_exit = p_mod->mpf_exit_worker;
-        } else if (HIXO_STAGE_THREAD == stage) {
+        } else if (HIXO_PHASE_THREAD == stage) {
             pf_exit = p_mod->mpf_exit_thread;
         } else {
             assert(0);
@@ -230,8 +135,6 @@ void hixo_exit(hixo_stage_type_t stage, hixo_module_type_t mod_type)
             continue;
         }
         (pf_exit)();
-
-        dlist_del(p_pos_node);
     }
 }
 
@@ -313,29 +216,44 @@ static int worker_main_core(void)
 {
     int rslt;
 
-    rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_CORE);
+    rslt = hixo_init(HIXO_PHASE_WORKER, HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_CORE;
     }
-    rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_EVENT);
+    rslt = hixo_init(HIXO_PHASE_WORKER, HIXO_MODULE_EVENT);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_EVENT;
     }
-    rslt = hixo_init(HIXO_STAGE_WORKER, HIXO_MODULE_APP);
+    rslt = hixo_init(HIXO_PHASE_WORKER, HIXO_MODULE_APP);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_APP;
     }
 
-    rslt = event_loop();
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        hixo_core_module_ctx_t *p_ctx = NULL;
+
+        if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+            continue;
+        }
+
+        p_ctx = (hixo_core_module_ctx_t *)gap_modules[i]->mp_ctx;
+        if (NULL == p_ctx->mpf_runloop) {
+            continue;
+        }
+        rslt = (*p_ctx->mpf_runloop)();
+        if (-1 == rslt) {
+            break;
+        }
+    }
 
     do {
-        hixo_exit(HIXO_STAGE_WORKER, HIXO_MODULE_APP);
+        hixo_exit(HIXO_PHASE_WORKER, HIXO_MODULE_APP);
 
 ERR_INIT_WORKER_APP:
-        hixo_exit(HIXO_STAGE_WORKER, HIXO_MODULE_EVENT);
+        hixo_exit(HIXO_PHASE_WORKER, HIXO_MODULE_EVENT);
 
 ERR_INIT_WORKER_EVENT:
-        hixo_exit(HIXO_STAGE_WORKER, HIXO_MODULE_CORE);
+        hixo_exit(HIXO_PHASE_WORKER, HIXO_MODULE_CORE);
 
 ERR_INIT_WORKER_CORE:
         break;
@@ -385,7 +303,7 @@ int hixo_main(void)
     int cpu_id = -1;
     hixo_conf_t *p_conf;
 
-    rslt = hixo_init(HIXO_STAGE_MASTER, HIXO_MODULE_CORE);
+    rslt = hixo_init(HIXO_PHASE_MASTER, HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
         goto EXIT;
     }
@@ -444,7 +362,7 @@ int hixo_main(void)
     }
 
 EXIT:
-    hixo_exit(HIXO_STAGE_MASTER, HIXO_MODULE_CORE);
+    hixo_exit(HIXO_PHASE_MASTER, HIXO_MODULE_CORE);
     return rslt;
 }
 
@@ -457,19 +375,7 @@ int main(int argc, char *argv[])
         goto ERR_SYSCONF;
     }
 
-#if DEBUG_FLAG
-    assert(dlist_empty(&g_core_module_loaded_list));
-    assert(dlist_empty(&g_event_module_loaded_list));
-    assert(dlist_empty(&g_app_module_loaded_list));
-#endif // DEBUG_FLAG
-
     rslt = (HIXO_OK == hixo_main()) ? EXIT_SUCCESS : EXIT_FAILURE;
-
-#if DEBUG_FLAG
-    assert(dlist_empty(&g_app_module_loaded_list));
-    assert(dlist_empty(&g_event_module_loaded_list));
-    assert(dlist_empty(&g_core_module_loaded_list));
-#endif // DEBUG_FLAG
 
 ERR_SYSCONF:
     return rslt;

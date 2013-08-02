@@ -54,7 +54,6 @@ typedef struct {
 
 typedef struct {
     hixo_conf_t *mp_conf;
-    void *mp_ctx;
     atomic_t *mp_accept_lock;
     hixo_socket_t **mpp_listeners;
     list_t *mp_connections;
@@ -78,6 +77,7 @@ typedef enum {
 
 
 extern hixo_sysconf_t g_sysconf;
+extern hixo_module_t *gap_modules[];
 extern hixo_rt_context_t g_rt_ctx;
 extern hixo_ps_info_t ga_pss_info[];
 extern hixo_ps_info_t *gp_ps_info;

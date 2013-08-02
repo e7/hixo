@@ -19,6 +19,7 @@
 
 static hixo_conf_t s_conf = {};
 static hixo_core_module_ctx_t s_main_core_ctx = {
+    NULL,
     &s_conf,
 };
 

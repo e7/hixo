@@ -19,6 +19,7 @@
 #include "hixo.h"
 
 typedef struct {
+    int (*mpf_runloop)(void);
     void *mp_private;
 } hixo_core_module_ctx_t;
 
