@@ -73,6 +73,37 @@ static int hixo_get_sysconf(void)
     return HIXO_OK;
 }
 
+static void fall_into_daemon(void)
+{
+    int fd;
+
+    if (0 != fork()) {
+        exit(0);
+    }
+    // signal(SIGHUP, SIG_IGN);
+
+    (void)setsid();
+
+    if (0 != fork()) {
+        exit(0);
+    }
+    // signal(SIGHUP, SIG_IGN);
+
+    (void)umask(0);
+    (void)chdir("/");
+    fd = open("/dev/null", O_RDWR);
+    if (-1 != fd) {
+        (void)dup2(fd, STDIN_FILENO);
+        (void)dup2(fd, STDOUT_FILENO);
+        (void)dup2(fd, STDERR_FILENO);
+        if (fd > STDERR_FILENO) {
+            (void)close(fd);
+        }
+    }
+
+    return;
+}
+
 
 int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
 {
@@ -307,10 +338,11 @@ int hixo_main(void)
     if (HIXO_ERROR == rslt) {
         goto EXIT;
     }
-
     p_conf = g_rt_ctx.mp_conf;
 
+    // 守护进程
     if (p_conf->m_daemon) {
+        fall_into_daemon();
     }
 
     // 分裂进程
