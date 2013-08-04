@@ -141,20 +141,20 @@ void test_syn_send(hixo_socket_t *p_sock)
     intptr_t tmp_err;
     ssize_t sent_size;
     struct iovec iovs[2];
-    uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
-                          "Server: hixo\r\n"
-                          "Content-Length: 174\r\n"
-                          "Content-Type: text/html\r\n"
-                          "Connection: keep-alive\r\n\r\n";
-    uint8_t data_body[] = "<!DOCTYPE html>\r\n"
-                          "<html>\r\n"
-                          "<head>\r\n"
-                          "<title>welcome to hixo</title>\r\n"
-                          "</head>\r\n"
-                          "<body bgcolor=\"white\" text=\"black\">\r\n"
-                          "<center><h1>welcome to hixo!</h1></center>\r\n"
-                          "</body>\r\n"
-                          "</html>\r\n";
+    static uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
+                                 "Server: hixo\r\n"
+                                 "Content-Length: 174\r\n"
+                                 "Content-Type: text/html\r\n"
+                                 "Connection: keep-alive\r\n\r\n";
+    static uint8_t data_body[] = "<!DOCTYPE html>\r\n"
+                                 "<html>\r\n"
+                                 "<head>\r\n"
+                                 "<title>welcome to hixo</title>\r\n"
+                                 "</head>\r\n"
+                                 "<body bgcolor=\"white\" text=\"black\">\r\n"
+                                 "<center><h1>welcome to hixo!</h1></center>\r\n"
+                                 "</body>\r\n"
+                                 "</html>\r\n";
 
     sent_size = 0;
     iovs[0].iov_base = data_head;
