@@ -297,6 +297,10 @@ void sig_int_handler_worker(int signo)
 {
 }
 
+void sig_alarm_handler_worker(int signo)
+{
+}
+
 static int worker_main(int cpu_id)
 {
     int rslt;
@@ -304,20 +308,30 @@ static int worker_main(int cpu_id)
     sigset_t filled_mask;
     struct sigaction sa;
 
-    // 绑定CPU
-    CPU_ZERO(&cpuset);
-    CPU_SET(cpu_id, &cpuset);
-    if (-1 == sched_setaffinity(0, sizeof(cpu_set_t), &cpuset)) {
-        (void)fprintf(stderr, "[WARNING] sched_setaffinity failed\n");
-    }
-
+    // 信号处理
     (void)sigfillset(&filled_mask);
+
     sa.sa_mask = filled_mask;
     sa.sa_flags = 0;
     sa.sa_handler = &sig_int_handler_worker;
     if (-1 == sigaction(SIGINT, &sa, NULL)) {
         rslt = HIXO_ERROR;
         goto EXIT;
+    }
+
+    sa.sa_mask = filled_mask;
+    sa.sa_flags = 0;
+    sa.sa_handler = &sig_alarm_handler_worker;
+    if (-1 == sigaction(SIGALRM, &sa, NULL)) {
+        rslt = HIXO_ERROR;
+        goto EXIT;
+    }
+
+    // 绑定CPU
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+    if (-1 == sched_setaffinity(0, sizeof(cpu_set_t), &cpuset)) {
+        (void)fprintf(stderr, "[WARNING] sched_setaffinity failed\n");
     }
 
     while (TRUE) {

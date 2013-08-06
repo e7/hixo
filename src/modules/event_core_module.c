@@ -19,12 +19,19 @@
 #include "event_module.h"
 
 
+#define HIXO_SYS_SCHED_INTERVAL_MS      20
+#define HIXO_ITIMER_RESOLUTION_S        0
+#define HIXO_ITIMER_RESOLUTION_MS       (100 * 1000)
+
+
 static int event_loop(void);
 
 static struct {
+    int m_ev_timer_ms;
     int m_shmid;
     hixo_event_module_ctx_t *mp_ev_ctx;
 } s_event_core_private = {
+    -1,
     -1,
     NULL,
 };
@@ -37,13 +44,14 @@ static hixo_core_module_ctx_t s_event_core_ctx = {
 int event_loop(void)
 {
     int rslt;
-    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
     hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
 
     while (TRUE) {
         list_t *p_iter, *p_next_iter;
 
-        rslt = (*p_ev_ctx->mpf_process_events)(p_conf->m_timer_resolution);
+        rslt = (*p_ev_ctx->mpf_process_events)(
+                   s_event_core_private.m_ev_timer_ms
+        );
         if (-1 == rslt) {
             break;
         }
@@ -427,6 +435,19 @@ static int event_core_init_worker(void)
 {
     int rslt;
     int tmp_err;
+    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
+    struct itimerval timer = {
+        {HIXO_ITIMER_RESOLUTION_S, HIXO_ITIMER_RESOLUTION_MS},
+        {HIXO_ITIMER_RESOLUTION_S, HIXO_ITIMER_RESOLUTION_MS},
+    };
+
+    // 系统定时器
+    if (p_conf->m_timer_resolution > HIXO_SYS_SCHED_INTERVAL_MS) {
+        s_event_core_private.m_ev_timer_ms = p_conf->m_timer_resolution;
+    } else {
+        s_event_core_private.m_ev_timer_ms = -1;
+        (void)setitimer(ITIMER_REAL, &timer, NULL);
+    }
 
     // 映射共享内存
     assert(-1 != s_event_core_private.m_shmid);
