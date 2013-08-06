@@ -277,6 +277,7 @@ static int event_core_create_listener(struct sockaddr *p_srv_addr,
         goto ERR_INIT;
     }
 
+    reuseaddr = 1;
     errno = 0;
     (void)setsockopt(fd,
                      SOL_SOCKET,
