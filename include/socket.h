@@ -60,5 +60,10 @@ extern int hixo_create_socket(hixo_socket_t *p_sock,
                               void (*pf_write_handler)(hixo_socket_t *));
 extern void hixo_socket_nodelay(hixo_socket_t *p_sock);
 extern void hixo_socket_unblock(hixo_socket_t *p_sock);
+#define hixo_socket_shutdown(p_sock) (void)shutdown(p_sock->m_fd, SHUT_WR)
+static inline void hixo_socket_close(hixo_socket_t *p_sock)
+{
+    p_sock->m_close = 1U;
+}
 extern void hixo_destroy_socket(hixo_socket_t *p_sock);
 #endif // __SOCKET_H__

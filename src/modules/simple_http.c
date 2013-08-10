@@ -79,11 +79,11 @@ void simple_http_handle_read(hixo_socket_t *p_sock)
         if (recved_size > 0) {
             continue;
         } else if (0 == recved_size) {
-            p_sock->m_close = 1U;
+            hixo_socket_close(p_sock);
             break;
         } else {
             if (ECONNRESET == tmp_err) {
-                p_sock->m_close = 1U;
+                hixo_socket_close(p_sock);
             } else {
                 if (EAGAIN != tmp_err) {
                     (void)fprintf(stderr,
@@ -148,8 +148,8 @@ void test_syn_send(hixo_socket_t *p_sock)
         }
     }
 
-    (void)shutdown(p_sock->m_fd, SHUT_WR);
-    p_sock->m_close = 1U;
+    hixo_socket_shutdown(p_sock);
+    hixo_socket_close(p_sock);
 
     return;
 }
