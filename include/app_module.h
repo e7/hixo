@@ -24,7 +24,7 @@ typedef struct {
     void (*mpf_handle_connect)(hixo_socket_t *);
     void (*mpf_handle_read)(hixo_socket_t *);
     void (*mpf_handle_write)(hixo_socket_t *);
-    void (*mpf_handle_close)(hixo_socket_t *);
+    void (*mpf_handle_disconnect)(hixo_socket_t *);
 } hixo_app_module_ctx_t;
 
 

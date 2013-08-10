@@ -17,6 +17,7 @@
 #include "hixo.h"
 #include "core_module.h"
 #include "event_module.h"
+#include "app_module.h"
 
 
 #define HIXO_SYS_SCHED_INTERVAL_MS      20
@@ -25,11 +26,14 @@
 
 
 static int event_loop(void);
+static void hixo_handle_accept(hixo_socket_t *p_sock);
+static void hixo_handle_close(hixo_socket_t *p_sock);
 
 static struct {
     int m_ev_timer_ms;
     int m_shmid;
     hixo_event_module_ctx_t *mp_ev_ctx;
+    hixo_app_module_ctx_t *mp_app_ctx;
 } s_event_core_private = {
     -1,
     -1,
@@ -45,6 +49,7 @@ int event_loop(void)
 {
     int rslt;
     hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
+    hixo_app_module_ctx_t *p_app_ctx = s_event_core_private.mp_app_ctx;
 
     while (TRUE) {
         list_t *p_iter, *p_next_iter;
@@ -66,6 +71,10 @@ int event_loop(void)
             if (p_sock->m_readable) {
                 (*p_sock->mpf_read_handler)(p_sock);
             }
+            if (p_sock->m_close) {
+                (*p_app_ctx->mpf_handle_disconnect)(p_sock);
+                hixo_handle_close(p_sock);
+            }
             if (p_sock->m_writable) {
                 (*p_sock->mpf_write_handler)(p_sock);
             }
@@ -79,129 +88,16 @@ int event_loop(void)
     return rslt;
 }
 
-static void hixo_handle_close(hixo_socket_t *p_sock)
-{
-    hixo_event_module_ctx_t *p_ctx = s_event_core_private.mp_ev_ctx;
-
-    p_sock->m_readable = 0U;
-    p_sock->m_writable = 0U;
-
-    (*p_ctx->mpf_del_event)(p_sock);
-    hixo_destroy_socket(p_sock);
-    assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
-    free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
-
-    ++gp_ps_info->m_power;
-}
-
-extern void test_syn_send(hixo_socket_t *p_sock);
-static void hixo_handle_read(hixo_socket_t *p_sock)
-{
-    while (p_sock->m_readable) {
-        int tmp_err;
-        ssize_t left_size;
-        uint8_t *p_buf;
-        ssize_t recved_size;
-
-        hixo_buffer_clean(&p_sock->m_readbuf);
-        if (hixo_buffer_full(&p_sock->m_readbuf)) {
-            if (HIXO_ERROR == hixo_expand_buffer(&p_sock->m_readbuf)) {
-                break;
-            }
-        }
-
-        assert(!hixo_buffer_full(&p_sock->m_readbuf));
-        left_size = hixo_get_buffer_capacity(&p_sock->m_readbuf)
-                        - p_sock->m_readbuf.m_size;
-        p_buf = hixo_get_buffer_data(&p_sock->m_readbuf);
-
-        errno = 0;
-        recved_size = recv(p_sock->m_fd,
-                           &p_buf[p_sock->m_readbuf.m_size],
-                           left_size,
-                           0);
-        tmp_err = errno;
-
-        if (recved_size > 0) {
-            continue;
-        } else if (0 == recved_size) {
-            hixo_handle_close(p_sock);
-            break;
-        } else {
-            if ((ECONNRESET == tmp_err) || (p_sock->m_closed)) {
-                hixo_handle_close(p_sock);
-            } else {
-                if (EAGAIN != tmp_err) {
-                    (void)fprintf(stderr,
-                                  "[ERROR] recv failed: %d\n",
-                                  tmp_err);
-                }
-                p_sock->m_readable = 0U;
-                test_syn_send(p_sock);
-            }
-            break;
-        }
-    }
-}
-
-void test_syn_send(hixo_socket_t *p_sock)
-{
-    intptr_t tmp_err;
-    ssize_t sent_size;
-    struct iovec iovs[2];
-    static uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
-                                 "Server: hixo\r\n"
-                                 "Content-Length: 174\r\n"
-                                 "Content-Type: text/html\r\n"
-                                 "Connection: keep-alive\r\n\r\n";
-    static uint8_t data_body[] = "<!DOCTYPE html>\r\n"
-                                 "<html>\r\n"
-                                 "<head>\r\n"
-                                 "<title>welcome to hixo</title>\r\n"
-                                 "</head>\r\n"
-                                 "<body bgcolor=\"white\" text=\"black\">\r\n"
-                                 "<center><h1>welcome to hixo!</h1></center>\r\n"
-                                 "</body>\r\n"
-                                 "</html>\r\n";
-
-    sent_size = 0;
-    iovs[0].iov_base = data_head;
-    iovs[0].iov_len = sizeof(data_head);
-    iovs[1].iov_base = data_body;
-    iovs[1].iov_len = sizeof(data_body);
-    while (sent_size < sizeof(data_head) + sizeof(data_body)) {
-        ssize_t tmp_sent;
-
-        errno = 0;
-        tmp_sent = writev(p_sock->m_fd, iovs, 2);
-        tmp_err = errno;
-        if (tmp_err) {
-            return;
-        } else {
-            sent_size += tmp_sent;
-        }
-    }
-
-    (void)shutdown(p_sock->m_fd, SHUT_WR);
-    p_sock->m_closed = 1U;
-
-    return;
-}
-
-static void hixo_handle_write(hixo_socket_t *p_sock)
-{
-    return;
-}
-
-static void hixo_handle_accept(hixo_socket_t *p_sock)
+void hixo_handle_accept(hixo_socket_t *p_sock)
 {
     int fd = 0;
     int tmp_err = 0;
     struct sockaddr client_addr;
     socklen_t len = 0;
-    hixo_event_module_ctx_t *p_ctx = s_event_core_private.mp_ev_ctx;
+    hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
+    hixo_app_module_ctx_t *p_app_ctx = s_event_core_private.mp_app_ctx;
 
-    assert(NULL != p_ctx);
+    assert(NULL != p_ev_ctx);
     while (TRUE) {
         hixo_socket_t *p_cmnct = NULL;
 
@@ -232,8 +128,8 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         if (HIXO_ERROR == hixo_create_socket(p_cmnct,
                                              fd,
                                              HIXO_CMNCT_SOCKET,
-                                             &hixo_handle_read,
-                                             &hixo_handle_write))
+                                             p_app_ctx->mpf_handle_read,
+                                             p_app_ctx->mpf_handle_write))
         {
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
             continue;
@@ -242,18 +138,33 @@ static void hixo_handle_accept(hixo_socket_t *p_sock)
         hixo_socket_unblock(p_cmnct);
         hixo_socket_nodelay(p_cmnct);
 
-        if (HIXO_ERROR == (*p_ctx->mpf_add_event)(p_cmnct)) {
+        if (HIXO_ERROR == (*p_ev_ctx->mpf_add_event)(p_cmnct)) {
             hixo_destroy_socket(p_cmnct);
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
             continue;
         }
 
         add_node(&g_rt_ctx.mp_connections, &p_cmnct->m_node);
-
         --gp_ps_info->m_power;
+        p_app_ctx->mpf_handle_connect(p_cmnct);
     }
 
     return;
+}
+
+void hixo_handle_close(hixo_socket_t *p_sock)
+{
+    hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
+
+    p_sock->m_readable = 0U;
+    p_sock->m_writable = 0U;
+
+    (*p_ev_ctx->mpf_del_event)(p_sock);
+    hixo_destroy_socket(p_sock);
+    assert(rm_node(&g_rt_ctx.mp_connections, &p_sock->m_node));
+    free_resource(&g_rt_ctx.m_sockets_cache, p_sock);
+
+    ++gp_ps_info->m_power;
 }
 
 static int event_core_create_listener(struct sockaddr *p_srv_addr,
@@ -461,7 +372,7 @@ static int event_core_init_worker(void)
         goto ERR_SHMAT;
     }
 
-    // 选择事件模块
+    // 查找事件模块
     for (int i = 0; NULL != gap_modules[i]; ++i) {
         hixo_module_t *p_mod = gap_modules[i];
 
@@ -477,15 +388,35 @@ static int event_core_init_worker(void)
         }
     }
     if (NULL == s_event_core_private.mp_ev_ctx) {
-        fprintf(stderr, "[ERROR] no event module selected\n");
-        goto ERR_NO_EVENT_MODULE;
+        fprintf(stderr, "[ERROR] event module not found\n");
+        goto ERR_NECESSARY_MODULE_NOT_FOUND;
+    }
+
+    // 查找应用模块
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        hixo_module_t *p_mod = gap_modules[i];
+
+        if (HIXO_MODULE_APP != p_mod->m_type) {
+            continue;
+        }
+
+        s_event_core_private.mp_app_ctx = (hixo_app_module_ctx_t *)(
+            p_mod->mp_ctx
+        );
+        if (NULL != s_event_core_private.mp_app_ctx) {
+            break;
+        }
+    }
+    if (NULL == s_event_core_private.mp_app_ctx) {
+        fprintf(stderr, "[ERROR] app module not found\n");
+        goto ERR_NECESSARY_MODULE_NOT_FOUND;
     }
 
     do {
         rslt = HIXO_OK;
         break;
 
-ERR_NO_EVENT_MODULE:
+ERR_NECESSARY_MODULE_NOT_FOUND:
         (void)shmdt((void const *)g_rt_ctx.mp_accept_lock);
         g_rt_ctx.mp_accept_lock = NULL;
 

@@ -52,7 +52,7 @@ int hixo_create_socket(hixo_socket_t *p_sock,
     p_sock->m_stale = !p_sock->m_stale;
     p_sock->m_readable = 0U;
     p_sock->m_writable = 0U;
-    p_sock->m_closed = 0U;
+    p_sock->m_close = 0U;
 
     do {
         rslt = HIXO_OK;

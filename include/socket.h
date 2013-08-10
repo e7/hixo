@@ -45,7 +45,7 @@ struct s_socket_t {
     unsigned int m_stale : 1;
     unsigned int m_readable : 1;
     unsigned int m_writable : 1;
-    unsigned int m_closed : 1;
+    unsigned int m_close : 1;
 };
 
 typedef enum {
