@@ -515,7 +515,5 @@ hixo_module_t g_event_core_module = {
     &event_core_exit_master,
 
     HIXO_MODULE_CORE,
-    INIT_DLIST(g_event_core_module, m_node),
-
     &s_event_core_ctx,
 };

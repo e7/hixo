@@ -16,6 +16,7 @@
 #include "conf.h"
 #include "core_module.h"
 #include "event_module.h"
+#include "app_module.h"
 
 
 #define HIXO_MAX_PSS            1024
@@ -35,6 +36,7 @@ hixo_module_t *gap_modules[] = {
     &g_main_core_module,
     &g_event_core_module,
     &g_epoll_module,
+    &g_simple_http_module,
     NULL,
 };
 

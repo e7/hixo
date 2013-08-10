@@ -10,4 +10,5 @@ bin_PROGRAMS = hixo
 hixo_SOURCES = conf.c hixo.c rbtree.c buffer.c resource.c socket.c \
                modules/main_core_module.c \
 			   modules/event_core_module.c \
-			   modules/epoll_module.c
+			   modules/epoll_module.c \
+			   modules/simple_http.c

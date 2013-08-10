@@ -13,46 +13,21 @@
 // limitations under the License.
 
 
-#include "conf.h"
-#include "core_module.h"
+#include "app_module.h"
 
 
-static hixo_conf_t s_conf = {};
-static hixo_core_module_ctx_t s_main_core_ctx = {
-    NULL,
-    &s_conf,
+
+static hixo_app_module_ctx_t s_simple_http_ctx = {
 };
 
-static int main_core_init(void)
-{
-    int rslt;
-
-    rslt = create_conf(&s_conf);
-    if (HIXO_OK == rslt) {
-        g_rt_ctx.mp_conf = &s_conf;
-    } else {
-        g_rt_ctx.mp_conf = NULL;
-    }
-
-    return rslt;
-}
-
-static void main_core_exit(void)
-{
-    destroy_conf(&s_conf);
-
-    return;
-}
-
-hixo_module_t g_main_core_module = {
-    &main_core_init,
+hixo_module_t g_simple_http_module = {
     NULL,
     NULL,
     NULL,
     NULL,
-    &main_core_exit,
+    NULL,
+    NULL,
 
-    HIXO_MODULE_CORE,
-    &s_main_core_ctx,
+    HIXO_MODULE_APP,
+    &s_simple_http_ctx,
 };
-

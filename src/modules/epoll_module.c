@@ -56,8 +56,6 @@ hixo_module_t g_epoll_module = {
     NULL,
 
     HIXO_MODULE_EVENT,
-    INIT_DLIST(g_epoll_module, m_node),
-
     &s_epoll_module_ctx,
 };
 

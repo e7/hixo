@@ -40,8 +40,6 @@ typedef struct {
     void (*mpf_exit_master)(void);
 
     hixo_module_type_t m_type;
-    dlist_t m_node;
-
     void *mp_ctx;
 } hixo_module_t;
 
