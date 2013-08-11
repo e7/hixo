@@ -6,6 +6,7 @@ AC_PROG_CC([cc])
 AM_PROG_CC_C_O
 AC_CONFIG_SRCDIR([src/hixo.c])
 AC_CONFIG_FILES([Makefile]
+                [include/Makefile]
                 [src/Makefile]
                 [tests/Makefile])
 AC_OUTPUT

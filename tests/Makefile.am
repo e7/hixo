@@ -1,4 +1,4 @@
-bin_PROGRAMS = hixo_resource_test rbtree_test
+noinst_PROGRAMS = hixo_resource_test rbtree_test
 
 hixo_resource_test_CFLAGS = -Wall -std=c99 -I $(top_srcdir)/include
 hixo_resource_test_LDADD = $(top_srcdir)/src/resource.o

@@ -1,2 +1,1 @@
-SUBDIRS = src
-SUBDIRS +=tests
+SUBDIRS = include src tests
