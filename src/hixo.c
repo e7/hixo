@@ -36,6 +36,7 @@ hixo_module_t *gap_modules[] = {
     &g_main_core_module,
     &g_event_core_module,
     &g_epoll_module,
+    &g_echo_module,
     &g_simple_http_module,
     NULL,
 };
@@ -104,71 +105,6 @@ static void fall_into_daemon(void)
     }
 
     return;
-}
-
-
-int hixo_init(hixo_stage_type_t stage, hixo_module_type_t mod_type)
-{
-    int rslt;
-
-    rslt = HIXO_OK;
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
-        int (*pf_init)(void) = NULL;
-
-        if (mod_type != gap_modules[i]->m_type) {
-            continue;
-        }
-
-        if (HIXO_PHASE_MASTER == stage) {
-            pf_init = gap_modules[i]->mpf_init_master;
-        } else if (HIXO_PHASE_WORKER == stage) {
-            pf_init = gap_modules[i]->mpf_init_worker;
-        } else if (HIXO_PHASE_THREAD == stage) {
-            pf_init = gap_modules[i]->mpf_init_thread;
-        } else {
-            assert(0);
-        }
-
-        if (NULL == pf_init) {
-            continue;
-        }
-
-        if (HIXO_ERROR == (pf_init)()) {
-            rslt = HIXO_ERROR;
-
-            break;
-        }
-
-    }
-
-    return rslt;
-}
-
-void hixo_exit(hixo_stage_type_t stage, hixo_module_type_t mod_type)
-{
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
-        void (*pf_exit)(void) = NULL;
-        hixo_module_t *p_mod = gap_modules[i];
-
-        if (mod_type != p_mod->m_type) {
-            continue;
-        }
-
-        if (HIXO_PHASE_MASTER == stage) {
-            pf_exit = p_mod->mpf_exit_master;
-        } else if (HIXO_PHASE_WORKER == stage) {
-            pf_exit = p_mod->mpf_exit_worker;
-        } else if (HIXO_PHASE_THREAD == stage) {
-            pf_exit = p_mod->mpf_exit_thread;
-        } else {
-            assert(0);
-        }
-
-        if (NULL == pf_exit) {
-            continue;
-        }
-        (pf_exit)();
-    }
 }
 
 void sig_child_handler(int signo)
@@ -249,18 +185,34 @@ static int worker_main_core(void)
 {
     int rslt;
 
-    rslt = hixo_init(HIXO_PHASE_WORKER, HIXO_MODULE_CORE);
+#define INIT_WORKER(module_type)    \
+    rslt = HIXO_OK;\
+    for (int i = 0; NULL != gap_modules[i]; ++i) {\
+        if (module_type != gap_modules[i]->m_type) {\
+            continue;\
+        }\
+        if (NULL == gap_modules[i]->mpf_init_worker) {\
+            continue;\
+        }\
+        rslt = (*gap_modules[i]->mpf_init_worker)();\
+    }
+
+    INIT_WORKER(HIXO_MODULE_CORE);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_CORE;
     }
-    rslt = hixo_init(HIXO_PHASE_WORKER, HIXO_MODULE_EVENT);
+
+    INIT_WORKER(HIXO_MODULE_EVENT);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_EVENT;
     }
-    rslt = hixo_init(HIXO_PHASE_WORKER, HIXO_MODULE_APP);
+
+    INIT_WORKER(HIXO_MODULE_APP);
     if (HIXO_ERROR == rslt) {
         goto ERR_INIT_WORKER_APP;
     }
+
+#undef INIT_WORKER
 
     for (int i = 0; NULL != gap_modules[i]; ++i) {
         hixo_core_module_ctx_t *p_ctx = NULL;
@@ -280,16 +232,26 @@ static int worker_main_core(void)
     }
 
     do {
-        hixo_exit(HIXO_PHASE_WORKER, HIXO_MODULE_APP);
+#define EXIT_WORKER(module_type)    \
+        for (int i = 0; NULL != gap_modules[i]; ++i) {\
+            if (module_type != gap_modules[i]->m_type) {\
+                continue;\
+            }\
+            if (NULL == gap_modules[i]->mpf_exit_master) {\
+                continue;\
+            }\
+            (*gap_modules[i]->mpf_exit_master)();\
+        }
 
+        EXIT_WORKER(HIXO_MODULE_APP);
 ERR_INIT_WORKER_APP:
-        hixo_exit(HIXO_PHASE_WORKER, HIXO_MODULE_EVENT);
-
+        EXIT_WORKER(HIXO_MODULE_EVENT);
 ERR_INIT_WORKER_EVENT:
-        hixo_exit(HIXO_PHASE_WORKER, HIXO_MODULE_CORE);
-
+        EXIT_WORKER(HIXO_MODULE_CORE);
 ERR_INIT_WORKER_CORE:
         break;
+
+#undef EXIT_WORKER
     } while (0);
 
     return rslt;
@@ -350,7 +312,16 @@ int hixo_main(void)
     int cpu_id = -1;
     hixo_conf_t *p_conf;
 
-    rslt = hixo_init(HIXO_PHASE_MASTER, HIXO_MODULE_CORE);
+    rslt = HIXO_OK;
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+            continue;
+        }
+        if (NULL == gap_modules[i]->mpf_init_master) {
+            continue;
+        }
+        rslt = (*gap_modules[i]->mpf_init_master)();
+    }
     if (HIXO_ERROR == rslt) {
         goto EXIT;
     }
@@ -410,10 +381,19 @@ int hixo_main(void)
     }
 
 EXIT:
-    hixo_exit(HIXO_PHASE_MASTER, HIXO_MODULE_CORE);
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
+            continue;
+        }
+        if (NULL == gap_modules[i]->mpf_exit_master) {
+            continue;
+        }
+        (*gap_modules[i]->mpf_exit_master)();
+    }
     return rslt;
 }
 
+#if 1
 int main(int argc, char *argv[])
 {
     int rslt;
@@ -428,3 +408,25 @@ int main(int argc, char *argv[])
 ERR_SYSCONF:
     return rslt;
 }
+#else
+int main(int argc, char *argv[])
+{
+    int rslt;
+
+    // init framework
+
+    // load application
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+    }
+
+    // framework runloop
+
+    // unload application
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+    }
+
+    // eixt framework
+
+    return rslt;
+}
+#endif

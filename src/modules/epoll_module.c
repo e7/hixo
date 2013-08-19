@@ -164,11 +164,11 @@ int epoll_process_events(int timer)
 
     // 添加监听套接字事件监视
     if (s_epoll_private.m_hold_lock) {
-        for (int i = 0; i < p_conf->m_nservers; ++i) {
-            assert(0 == (((uintptr_t)g_rt_ctx.mpp_listeners[i]) & 1));
-            if (HIXO_ERROR == epoll_add_event(g_rt_ctx.mpp_listeners[i])) {
-                g_rt_ctx.mpp_listeners[i] = (hixo_socket_t *)(
-                        ((uintptr_t)g_rt_ctx.mpp_listeners[i]) | 1
+        for (int i = 0; i < g_rt_ctx.m_nservers; ++i) {
+            assert(0 == (((uintptr_t)g_rt_ctx.mpp_servers[i]) & 1));
+            if (HIXO_ERROR == epoll_add_event(g_rt_ctx.mpp_servers[i])) {
+                g_rt_ctx.mpp_servers[i] = (hixo_socket_t *)(
+                        ((uintptr_t)g_rt_ctx.mpp_servers[i]) | 1
                 );
                 break;
             }
@@ -185,14 +185,14 @@ int epoll_process_events(int timer)
 
     // 清除监听套接字事件监视
     if (s_epoll_private.m_hold_lock) {
-        for (int i = 0; i < p_conf->m_nservers; ++i) {
-            if (((uintptr_t)g_rt_ctx.mpp_listeners[i]) & 1) {
-                g_rt_ctx.mpp_listeners[i] = (hixo_socket_t *)(
-                        ((uintptr_t)g_rt_ctx.mpp_listeners[i]) & (~1)
+        for (int i = 0; i < g_rt_ctx.m_nservers; ++i) {
+            if (((uintptr_t)g_rt_ctx.mpp_servers[i]) & 1) {
+                g_rt_ctx.mpp_servers[i] = (hixo_socket_t *)(
+                        ((uintptr_t)g_rt_ctx.mpp_servers[i]) & (~1)
                 );
                 continue;
             }
-            if (HIXO_ERROR == epoll_del_event(g_rt_ctx.mpp_listeners[i])) {
+            if (HIXO_ERROR == epoll_del_event(g_rt_ctx.mpp_servers[i])) {
                 break;
             }
         }

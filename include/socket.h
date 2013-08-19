@@ -37,6 +37,7 @@ struct s_socket_t {
     int m_fd;
     void (*mpf_read_handler)(hixo_socket_t *);
     void (*mpf_write_handler)(hixo_socket_t *);
+    void (*mpf_disconnect_handler)(hixo_socket_t *);
     list_t m_node;
     list_t m_posted_node;
     int m_event_types;
@@ -57,7 +58,8 @@ extern int hixo_create_socket(hixo_socket_t *p_sock,
                               int fd,
                               hixo_sock_type_t type,
                               void (*pf_read_handler)(hixo_socket_t *),
-                              void (*pf_write_handler)(hixo_socket_t *));
+                              void (*pf_write_handler)(hixo_socket_t *),
+                              void (*pf_disconnect_handler)(hixo_socket_t *));
 extern void hixo_socket_nodelay(hixo_socket_t *p_sock);
 extern void hixo_socket_unblock(hixo_socket_t *p_sock);
 #define hixo_socket_shutdown(p_sock) (void)shutdown(p_sock->m_fd, SHUT_WR)

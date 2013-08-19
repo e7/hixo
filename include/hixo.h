@@ -26,10 +26,16 @@
 
 
 typedef enum {
-    HIXO_MODULE_CORE,
+    HIXO_MODULE_CORE = 0xE78F8A,
     HIXO_MODULE_EVENT,
     HIXO_MODULE_APP,
 } hixo_module_type_t;
+
+typedef struct {
+    char *mp_ip;
+    uint16_t m_port;
+    int m_backlog;
+} hixo_listen_conf_t;
 
 typedef struct {
     int (*mpf_init_master)(void);
@@ -53,7 +59,8 @@ typedef struct {
 typedef struct {
     hixo_conf_t *mp_conf;
     atomic_t *mp_accept_lock;
-    hixo_socket_t **mpp_listeners;
+    hixo_socket_t **mpp_servers;
+    int m_nservers;
     list_t *mp_connections;
     list_t *mp_posted_events;
     hixo_resource_t m_sockets_cache;

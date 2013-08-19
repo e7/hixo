@@ -25,8 +25,12 @@ typedef struct {
     void (*mpf_handle_read)(hixo_socket_t *);
     void (*mpf_handle_write)(hixo_socket_t *);
     void (*mpf_handle_disconnect)(hixo_socket_t *);
+    hixo_listen_conf_t *mpa_servers;
+    int m_nservers;
+    dlist_t m_node;
 } hixo_app_module_ctx_t;
 
 
+extern hixo_module_t g_echo_module;
 extern hixo_module_t g_simple_http_module;
 #endif // __APP_MODULE_H__

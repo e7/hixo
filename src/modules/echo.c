@@ -15,45 +15,45 @@
 
 #include "app_module.h"
 
-static int simple_http_init_worker(void);
 
-static void simple_http_handle_connect(hixo_socket_t *p_sock);
-static void simple_http_handle_read(hixo_socket_t *p_sock);
-static void simple_http_handle_write(hixo_socket_t *p_sock);
-static void simple_http_handle_disconnect(hixo_socket_t *p_sock);
+static int echo_init_worker(void);
 
-static hixo_listen_conf_t sa_simple_http_srvs[] = {
-    {"0.0.0.0", 8002, 0},
-    {"0.0.0.0", 8003, 0},
+static void echo_handle_connect(hixo_socket_t *p_sock);
+static void echo_handle_read(hixo_socket_t *p_sock);
+static void echo_handle_write(hixo_socket_t *p_sock);
+static void echo_handle_disconnect(hixo_socket_t *p_sock);
+
+static hixo_listen_conf_t sa_echo_srvs[] = {
+    {"0.0.0.0", 8001, 0},
 };
 
-static hixo_app_module_ctx_t s_simple_http_ctx = {
-    &simple_http_handle_connect,
-    &simple_http_handle_read,
-    &simple_http_handle_write,
-    &simple_http_handle_disconnect,
-    sa_simple_http_srvs,
-    ARRAY_COUNT(sa_simple_http_srvs),
-    INIT_DLIST(s_simple_http_ctx, m_node),
+static hixo_app_module_ctx_t s_echo_ctx = {
+    &echo_handle_connect,
+    &echo_handle_read,
+    &echo_handle_write,
+    &echo_handle_disconnect,
+    sa_echo_srvs,
+    ARRAY_COUNT(sa_echo_srvs),
+    INIT_DLIST(s_echo_ctx, m_node),
 };
 
-hixo_module_t g_simple_http_module = {
+hixo_module_t g_echo_module = {
     NULL,
-    &simple_http_init_worker,
+    &echo_init_worker,
     NULL,
     NULL,
     NULL,
     NULL,
 
     HIXO_MODULE_APP,
-    &s_simple_http_ctx,
+    &s_echo_ctx,
 };
 
 
-int simple_http_init_worker(void)
+int echo_init_worker(void)
 {
-    for (int i = 0; i < ARRAY_COUNT(sa_simple_http_srvs); ++i) {
-        sa_simple_http_srvs[i].m_port = htons(sa_simple_http_srvs[i].m_port);
+    for (int i = 0; i < ARRAY_COUNT(sa_echo_srvs); ++i) {
+        sa_echo_srvs[i].m_port = htons(sa_echo_srvs[i].m_port);
     }
 
     return HIXO_OK;
@@ -63,12 +63,12 @@ int simple_http_init_worker(void)
 // ***** app module interface *****
 static void test_syn_send(hixo_socket_t *p_sock);
 
-void simple_http_handle_connect(hixo_socket_t *p_sock)
+void echo_handle_connect(hixo_socket_t *p_sock)
 {
     return;
 }
 
-void simple_http_handle_read(hixo_socket_t *p_sock)
+void echo_handle_read(hixo_socket_t *p_sock)
 {
     while (p_sock->m_readable) {
         int tmp_err;
@@ -119,12 +119,12 @@ void simple_http_handle_read(hixo_socket_t *p_sock)
     return;
 }
 
-void simple_http_handle_write(hixo_socket_t *p_sock)
+void echo_handle_write(hixo_socket_t *p_sock)
 {
     return;
 }
 
-void simple_http_handle_disconnect(hixo_socket_t *p_sock)
+void echo_handle_disconnect(hixo_socket_t *p_sock)
 {
     return;
 }
@@ -142,10 +142,10 @@ void test_syn_send(hixo_socket_t *p_sock)
     static uint8_t data_body[] = "<!DOCTYPE html>\r\n"
                                  "<html>\r\n"
                                  "<head>\r\n"
-                                 "<title>welcome to hixo</title>\r\n"
+                                 "<title>welcome to echo</title>\r\n"
                                  "</head>\r\n"
                                  "<body bgcolor=\"white\" text=\"black\">\r\n"
-                                 "<center><h1>welcome to hixo!</h1></center>\r\n"
+                                 "<center><h1>welcome to echo!</h1></center>\r\n"
                                  "</body>\r\n"
                                  "</html>\r\n";
 

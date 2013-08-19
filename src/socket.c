@@ -20,7 +20,8 @@ int hixo_create_socket(hixo_socket_t *p_sock,
                        int fd,
                        hixo_sock_type_t type,
                        void (*pf_read_handler)(hixo_socket_t *),
-                       void (*pf_write_handler)(hixo_socket_t *))
+                       void (*pf_write_handler)(hixo_socket_t *),
+                       void (*pf_disconnect_handler)(hixo_socket_t *))
 {
     int rslt;
 

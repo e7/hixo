@@ -33,11 +33,12 @@ static struct {
     int m_ev_timer_ms;
     int m_shmid;
     hixo_event_module_ctx_t *mp_ev_ctx;
-    hixo_app_module_ctx_t *mp_app_ctx;
+    dlist_t m_app_ctx_list;
 } s_event_core_private = {
     -1,
     -1,
     NULL,
+    INIT_DLIST(s_event_core_private, m_app_ctx_list),
 };
 
 static hixo_core_module_ctx_t s_event_core_ctx = {
@@ -49,7 +50,6 @@ int event_loop(void)
 {
     int rslt;
     hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
-    hixo_app_module_ctx_t *p_app_ctx = s_event_core_private.mp_app_ctx;
 
     while (TRUE) {
         list_t *p_iter, *p_next_iter;
@@ -68,14 +68,16 @@ int event_loop(void)
                                                  hixo_socket_t,
                                                  m_posted_node);
 
-            if (p_sock->m_readable) {
+            if ((p_sock->m_readable) && (p_sock->mpf_read_handler)) {
                 (*p_sock->mpf_read_handler)(p_sock);
             }
             if (p_sock->m_close) {
-                (*p_app_ctx->mpf_handle_disconnect)(p_sock);
+                if (p_sock->mpf_disconnect_handler) {
+                    (*p_sock->mpf_disconnect_handler)(p_sock);
+                }
                 hixo_handle_close(p_sock);
             }
-            if (p_sock->m_writable) {
+            if ((p_sock->m_writable) && (p_sock->mpf_write_handler)) {
                 (*p_sock->mpf_write_handler)(p_sock);
             }
             assert(rm_node(&g_rt_ctx.mp_posted_events,
@@ -92,10 +94,10 @@ void hixo_handle_accept(hixo_socket_t *p_sock)
 {
     int fd = 0;
     int tmp_err = 0;
-    struct sockaddr client_addr;
+    struct sockaddr_in client_addr;
     socklen_t len = 0;
     hixo_event_module_ctx_t *p_ev_ctx = s_event_core_private.mp_ev_ctx;
-    hixo_app_module_ctx_t *p_app_ctx = s_event_core_private.mp_app_ctx;
+    hixo_app_module_ctx_t *p_app_ctx = NULL;
 
     assert(NULL != p_ev_ctx);
     while (TRUE) {
@@ -108,7 +110,7 @@ void hixo_handle_accept(hixo_socket_t *p_sock)
         }
 
         errno = 0;
-        fd = accept(p_sock->m_fd, &client_addr, &len);
+        fd = accept(p_sock->m_fd, (struct sockaddr *)&client_addr, &len);
         tmp_err = errno;
         if (tmp_err) {
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
@@ -125,11 +127,37 @@ void hixo_handle_accept(hixo_socket_t *p_sock)
         }
 
         assert(fd >= 0);
+        dlist_for_each_f (p_pos_node, &s_event_core_private.m_app_ctx_list) {
+            hixo_app_module_ctx_t *p_iter;
+            int found = FALSE;
+
+            p_iter = CONTAINER_OF(p_pos_node, hixo_app_module_ctx_t, m_node);
+            for (int i = 0; i < p_iter->m_nservers; ++i) {
+                struct sockaddr_in sockname;
+                socklen_t sn_len = sizeof(sockname);
+
+                assert(0 == getsockname(fd,
+                                        (struct sockaddr *)&sockname,
+                                        &sn_len));
+                if (sockname.sin_port != p_iter->mpa_servers[i].m_port) {
+                    continue;
+                }
+                found = TRUE;
+                break;
+            }
+
+            if (found) {
+                p_app_ctx = p_iter;
+                break;
+            }
+        }
+        assert(NULL != p_app_ctx);
         if (HIXO_ERROR == hixo_create_socket(p_cmnct,
                                              fd,
                                              HIXO_CMNCT_SOCKET,
                                              p_app_ctx->mpf_handle_read,
-                                             p_app_ctx->mpf_handle_write))
+                                             p_app_ctx->mpf_handle_write,
+                                             p_app_ctx->mpf_handle_disconnect))
         {
             free_resource(&g_rt_ctx.m_sockets_cache, p_cmnct);
             continue;
@@ -237,7 +265,7 @@ static int event_core_init_master(void)
     int rslt = HIXO_ERROR;
     int valid_sockets = 0;
     int tmp_err = 0;
-    hixo_socket_t *p_listener = NULL;
+    int nservers;
     hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
 
     errno = 0;
@@ -247,15 +275,28 @@ static int event_core_init_master(void)
         goto ERR_SHMGET;
     }
 
-    g_rt_ctx.mpp_listeners = (hixo_socket_t **)calloc(p_conf->m_nservers,
-                                                      sizeof(hixo_socket_t *));
-    if (NULL == g_rt_ctx.mpp_listeners) {
+    // 统计应用服务数
+    nservers = 0;
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        hixo_app_module_ctx_t *p_app_ctx;
+
+        if (HIXO_MODULE_APP != gap_modules[i]->m_type) {
+            continue;
+        }
+
+        p_app_ctx = (hixo_app_module_ctx_t *)gap_modules[i]->mp_ctx;
+        nservers += (p_app_ctx->m_nservers > 0) ? p_app_ctx->m_nservers : 0;
+    }
+
+    g_rt_ctx.mpp_servers = (hixo_socket_t **)calloc(nservers,
+                                                    sizeof(hixo_socket_t *));
+    g_rt_ctx.m_nservers = nservers;
+    if (NULL == g_rt_ctx.mpp_servers) {
         goto ERR_LISTENERS_CACHE;
     }
 
     if (HIXO_ERROR == create_resource(&g_rt_ctx.m_sockets_cache,
-                                      p_conf->m_max_connections
-                                          + p_conf->m_nservers,
+                                      p_conf->m_max_connections + nservers,
                                       sizeof(hixo_socket_t),
                                       OFFSET_OF(hixo_socket_t, m_node)))
     {
@@ -264,41 +305,63 @@ static int event_core_init_master(void)
     }
 
     valid_sockets = 0;
-    for (int i = 0; i < p_conf->m_nservers; ++i) {
-        int fd = 0;
-        int backlog = (p_conf->mppc_srv_addrs[i]->m_backlog > 0)
-                          ? p_conf->mppc_srv_addrs[i]->m_backlog
-                          : SOMAXCONN;
-        struct sockaddr_in srv_addr;
+    for (int i = 0; NULL != gap_modules[i]; ++i) {
+        hixo_app_module_ctx_t *p_app_ctx;
 
-        p_listener
-            = (hixo_socket_t *)alloc_resource(&g_rt_ctx.m_sockets_cache);
-        assert(NULL != p_listener);
-
-        (void)memset(&srv_addr, 0, sizeof(srv_addr));
-        srv_addr.sin_family = AF_INET;
-        srv_addr.sin_addr.s_addr = htonl(p_conf->mppc_srv_addrs[i]->m_ip);
-        srv_addr.sin_port = htons(p_conf->mppc_srv_addrs[i]->m_port);
-        fd = event_core_create_listener((struct sockaddr *)&srv_addr, backlog);
-        if (INVALID_FD == fd) {
-            free_resource(&g_rt_ctx.m_sockets_cache, p_listener);
+        if (HIXO_MODULE_APP != gap_modules[i]->m_type) {
             continue;
         }
 
-        (void)hixo_create_socket(p_listener,
-                                 fd,
-                                 HIXO_LISTEN_SOCKET,
-                                 &hixo_handle_accept,
-                                 NULL);
+        p_app_ctx = (hixo_app_module_ctx_t *)gap_modules[i]->mp_ctx;
+        for (int j = 0; j < p_app_ctx->m_nservers; ++j) {
+            int fd;
+            int backlog;
+            struct sockaddr_in srv_addr;
+            hixo_socket_t *p_listener = NULL;
+            hixo_listen_conf_t *p_server = &p_app_ctx->mpa_servers[j];
 
-        g_rt_ctx.mpp_listeners[i] = p_listener;
-        add_node(&g_rt_ctx.mp_connections, &p_listener->m_node);
+            backlog = (p_server->m_backlog > 0)
+                          ? p_server->m_backlog
+                          : SOMAXCONN;
+            (void)memset(&srv_addr, 0, sizeof(srv_addr));
+            srv_addr.sin_family = AF_INET;
+            if (!inet_aton(p_server->mp_ip, &srv_addr.sin_addr)) {
+                // 无效ip
+                continue;
+            }
+            srv_addr.sin_port = htons(p_server->m_port);
+            p_listener
+                = (hixo_socket_t *)alloc_resource(&g_rt_ctx.m_sockets_cache);
+            assert(NULL != p_listener);
+            fd = event_core_create_listener((struct sockaddr *)&srv_addr,
+                                            backlog);
+            if (INVALID_FD == fd) {
+                goto ERR_CREATE_LISTENER__;
+            }
 
-        ++valid_sockets;
+            (void)hixo_create_socket(p_listener,
+                                     fd,
+                                     HIXO_LISTEN_SOCKET,
+                                     &hixo_handle_accept,
+                                     NULL,
+                                     NULL);
+
+            g_rt_ctx.mpp_servers[valid_sockets] = p_listener;
+            add_node(&g_rt_ctx.mp_connections, &p_listener->m_node);
+
+            ++valid_sockets;
+            continue;
+
+        ERR_CREATE_LISTENER__:
+            free_resource(&g_rt_ctx.m_sockets_cache, p_listener);
+        }
+
     }
     if (0 == valid_sockets) {
         goto ERR_CREATE_LISTENERS;
     }
+
+    g_rt_ctx.m_nservers = valid_sockets;
 
     do {
         fprintf(stderr, "[INFO] count of listeners: %d\n", valid_sockets);
@@ -308,7 +371,7 @@ static int event_core_init_master(void)
 ERR_CREATE_LISTENERS:
         destroy_resource(&g_rt_ctx.m_sockets_cache);
 ERR_SOCKETS_CACHE:
-        free(g_rt_ctx.mpp_listeners);
+        free(g_rt_ctx.mpp_servers);
 ERR_LISTENERS_CACHE:
         (void)shmctl(s_event_core_private.m_shmid, IPC_RMID, 0);
 ERR_SHMGET:
@@ -321,10 +384,8 @@ ERR_SHMGET:
 
 static void event_core_exit_master(void)
 {
-    hixo_conf_t *p_conf = g_rt_ctx.mp_conf;
-
-    for (int i = 0; i < p_conf->m_nservers; ++i) {
-        hixo_socket_t * p_listener = g_rt_ctx.mpp_listeners[i];
+    for (int i = 0; i < g_rt_ctx.m_nservers; ++i) {
+        hixo_socket_t * p_listener = g_rt_ctx.mpp_servers[i];
 
         if (NULL == p_listener) {
             continue;
@@ -395,19 +456,17 @@ static int event_core_init_worker(void)
     // 查找应用模块
     for (int i = 0; NULL != gap_modules[i]; ++i) {
         hixo_module_t *p_mod = gap_modules[i];
+        hixo_app_module_ctx_t *p_app_ctx;
 
         if (HIXO_MODULE_APP != p_mod->m_type) {
             continue;
         }
 
-        s_event_core_private.mp_app_ctx = (hixo_app_module_ctx_t *)(
-            p_mod->mp_ctx
-        );
-        if (NULL != s_event_core_private.mp_app_ctx) {
-            break;
-        }
+        p_app_ctx = (hixo_app_module_ctx_t *)p_mod->mp_ctx;
+        dlist_add_head(&s_event_core_private.m_app_ctx_list,
+                       &p_app_ctx->m_node);
     }
-    if (NULL == s_event_core_private.mp_app_ctx) {
+    if (dlist_empty(&s_event_core_private.m_app_ctx_list)) {
         fprintf(stderr, "[ERROR] app module not found\n");
         goto ERR_NECESSARY_MODULE_NOT_FOUND;
     }

@@ -24,44 +24,18 @@
 #define CONNECTION_TIME_OUT     60
 #define LINGER_TIME_OUT         10
 
-static hixo_listen_conf_t const S_SRV_ADDRS[] = {
-    {INADDR_ANY, 8001, 0},
-    {INADDR_ANY, 8002, 0},
-    {INADDR_ANY, 8003, 0},
-    {INADDR_ANY, 8004, 0},
-};
-
 int create_conf(hixo_conf_t *p_conf)
 {
-    p_conf->mppc_srv_addrs
-        = (hixo_listen_conf_t const **)
-        calloc(ARRAY_COUNT(S_SRV_ADDRS) + 1,
-               sizeof(hixo_listen_conf_t const *));
-    if (NULL == p_conf->mppc_srv_addrs) {
-        return HIXO_ERROR;
-    }
-
     p_conf->m_daemon = DAEMON;
     p_conf->m_worker_processes = WORKER_PROCESSES;
     p_conf->m_max_connections = MAX_CONNECTIONS;
     p_conf->m_timer_resolution = TIMER_RESOLUTION;
     p_conf->m_connection_timeout = CONNECTION_TIME_OUT;
-    p_conf->m_nservers = 0;
-    for (int i = 0; i < ARRAY_COUNT(S_SRV_ADDRS); ++i) {
-        p_conf->mppc_srv_addrs[i] = &S_SRV_ADDRS[i];
-        ++p_conf->m_nservers;
-    }
-    p_conf->mppc_srv_addrs[ARRAY_COUNT(S_SRV_ADDRS)] = NULL;
 
     return HIXO_OK;
 }
 
 void destroy_conf(hixo_conf_t *p_conf)
 {
-    if (NULL != p_conf->mppc_srv_addrs) {
-        free(p_conf->mppc_srv_addrs);
-        p_conf->mppc_srv_addrs = NULL;
-    }
-
     return;
 }
