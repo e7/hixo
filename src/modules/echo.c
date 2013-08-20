@@ -74,6 +74,7 @@ void echo_handle_connect(hixo_socket_t *p_sock)
 
 void echo_handle_read(hixo_socket_t *p_sock)
 {
+    /** memory leak
     DEFINE_DLIST(old_queue);
     struct iovec *p_vecs = alloca(NBUFS * sizeof(struct iovec));
 
@@ -137,7 +138,19 @@ void echo_handle_read(hixo_socket_t *p_sock)
             // 合并迭代缓冲
             dlist_merge(&p_sock->m_readbuf_queue, &tmp_queue);
             continue;
-        } else if (0 == recved_size) {
+        }
+
+        // 释放迭代缓冲
+        dlist_for_each_f_safe (p_pos_node, p_cur_next, &tmp_queue) {
+            hixo_buffer_t *p_buf;
+
+            dlist_del(p_pos_node);
+            p_buf = CONTAINER_OF(p_pos_node, hixo_buffer_t, m_node);
+            hixo_destroy_buffer(p_buf);
+            free(p_buf);
+        }
+
+        if (0 == recved_size) {
             hixo_socket_close(p_sock);
             break;
         } else {
@@ -157,7 +170,12 @@ void echo_handle_read(hixo_socket_t *p_sock)
     }
 
     // 重拾剩余旧缓冲
-    dlist_merge(&p_sock->m_readbuf_queue, &old_queue);
+    dlist_merge(&p_sock->m_readbuf_queue, &old_queue);*/
+
+    void *buf = alloca(1024);
+    while (recv(p_sock->m_fd, buf, 1024, 0) > 0) {
+    }
+    test_syn_send(p_sock);
 
     return;
 }
