@@ -13,29 +13,25 @@
 // limitations under the License.
 
 
+#ifndef __ADV_STRING__H__
+#define __ADV_STRING__H__
+
+
 #include "common.h"
-#include "conf.h"
 
 
-#define DAEMON                  FALSE
-#define WORKER_PROCESSES        1
-#define MAX_CONNECTIONS         10000
-#define TIMER_RESOLUTION        1000
-#define CONNECTION_TIME_OUT     60
-#define LINGER_TIME_OUT         10
+typedef struct {
+    uint8_t *mp_data;
+    ssize_t m_len;
+} hixo_array_t;
 
-int create_conf(hixo_conf_t *p_conf)
-{
-    p_conf->m_daemon = DAEMON;
-    p_conf->m_worker_processes = WORKER_PROCESSES;
-    p_conf->m_max_connections = MAX_CONNECTIONS;
-    p_conf->m_timer_resolution = TIMER_RESOLUTION;
-    p_conf->m_connection_timeout = CONNECTION_TIME_OUT;
+typedef struct {
+    char *mp_str;
+    ssize_t m_size;
+    hixo_array_t *mp_buf;
+} hixo_adv_string_t;
+#define INIT_ADV_STRING(orig)               {orig, sizeof(orig) - 1, NULL}
+#define DEFINE_ADV_STRING(name, orig)       \
+            hixo_adv_string_t name = INIT_ADV_STRING(orig)
 
-    return HIXO_OK;
-}
-
-void destroy_conf(hixo_conf_t *p_conf)
-{
-    return;
-}
+#endif // __ADV_STRING__H__

@@ -57,6 +57,12 @@ void hixo_buffer_set_size(hixo_buffer_t *p_buf, ssize_t size)
 }
 
 static inline
+ssize_t hixo_buffer_get_size(hixo_buffer_t *p_buf)
+{
+    return p_buf->m_size;
+}
+
+static inline
 ssize_t hixo_buffer_get_capacity(hixo_buffer_t *p_buf)
 {
     return p_buf->m_capacity;

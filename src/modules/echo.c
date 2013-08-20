@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include "adv_string.h"
 #include "app_module.h"
 
 
@@ -206,16 +207,20 @@ void echo_handle_disconnect(hixo_socket_t *p_sock)
 
 void test_syn_send(hixo_socket_t *p_sock)
 {
+/*    static uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
+                                 "Server: hixo\r\n"
+                                 "Content-Length: %s\r\n"
+                                 "Content-Type: text/html\r\n"
+                                 "Connection: keep-alive\r\n\r\n";
+
     intptr_t tmp_err;
     ssize_t sent_size;
     struct iovec iovs[2];
-    static uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
-                                 "Server: hixo\r\n"
-                                 "Content-Length: 6\r\n"
-                                 "Content-Type: text/html\r\n"
-                                 "Connection: keep-alive\r\n\r\n";
-    static uint8_t data_body[] = "hello";
+    char len[32] = {};
+    uint8_t *p_data_head = alloca(256);
 
+    (void)snprintf(len, 32, "%s", hixo_buffer_get_size(CONTAINER_OF(p_sock->m_readbuf_queue.mp_next, hixo_buffer_t, m_node)));
+    (void)snprintf(p_data_head, 256, data_head, len);
     sent_size = 0;
     iovs[0].iov_base = data_head;
     iovs[0].iov_len = sizeof(data_head);
@@ -232,8 +237,10 @@ void test_syn_send(hixo_socket_t *p_sock)
         } else {
             sent_size += tmp_sent;
         }
-    }
+    }*/
 
+    do {
+    } while (0);
     hixo_socket_shutdown(p_sock);
     hixo_socket_close(p_sock);
 
