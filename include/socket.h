@@ -41,8 +41,8 @@ struct s_socket_t {
     list_t m_node;
     list_t m_posted_node;
     int m_event_types;
-    hixo_buffer_t m_readbuf;
-    hixo_buffer_t m_writebuf;
+    dlist_t m_readbuf_queue;
+    dlist_t m_writebuf_queue;
     unsigned int m_stale : 1;
     unsigned int m_readable : 1;
     unsigned int m_writable : 1;

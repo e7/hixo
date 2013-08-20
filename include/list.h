@@ -62,8 +62,9 @@ int rm_node(list_t **pp_list, list_t *p_node)
 
 
 // 栈
-#define push_node(pplist, p_node)   add_node(pplist, p_node)
-#define pop_node(pplist)            rm_node(pplist, *pplist)
+typedef list_t lstack_t;
+#define push_node(pplstack, p_node)   add_node(pplstack, p_node)
+#define pop_node(pplstack)            rm_node(pplstack, *pplstack)
 
 
 // 双链表
@@ -72,9 +73,9 @@ struct s_dlist_t {
     dlist_t *mp_next;
     dlist_t *mp_prev;
 };
-#define INIT_DLIST(obj, node)       {&obj.node, &obj.node}
+#define INIT_DLIST(node)            {&(node), &(node)}
 #define DECLARE_DLIST(name)         extern dlist_t name
-#define DEFINE_DLIST(name)          dlist_t name = {&(name), &(name)}
+#define DEFINE_DLIST(name)          dlist_t name = INIT_DLIST(name)
 
 static inline
 void dlist_init(dlist_t *p_list)
@@ -105,6 +106,47 @@ int dlist_empty(dlist_t *p_list)
 {
     return ((p_list->mp_prev == p_list->mp_next)
                 && (p_list == p_list->mp_prev));
+}
+
+static inline
+dlist_t *dlist_get_head(dlist_t *p_list)
+{
+    dlist_t *p_rslt;
+
+    if (dlist_empty(p_list)) {
+        p_rslt = NULL;
+    } else {
+        p_rslt = p_list->mp_next;
+    }
+
+    return p_rslt;
+}
+
+static inline
+dlist_t *dlist_get_tail(dlist_t *p_list)
+{
+    dlist_t *p_rslt;
+
+    if (dlist_empty(p_list)) {
+        p_rslt = NULL;
+    } else {
+        p_rslt = p_list->mp_prev;
+    }
+
+    return p_rslt;
+}
+
+static inline
+void dlist_merge(dlist_t *p_head, dlist_t *p_body)
+{
+    if (dlist_empty(p_body)) {
+        return;
+    }
+
+    dlist_add_tail(p_head, p_body->mp_next);
+    dlist_init(p_body);
+
+    return;
 }
 
 static inline

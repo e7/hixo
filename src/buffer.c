@@ -34,11 +34,13 @@ int hixo_create_buffer(hixo_buffer_t *p_buf, ssize_t capacity)
         p_buf->m_offset = 0;
         p_buf->m_size = 0;
         p_buf->m_capacity = capacity;
+        dlist_init(&p_buf->m_node);
     } else {
         p_buf->mp_data = NULL;
         p_buf->m_offset = 0;
         p_buf->m_size = 0;
         p_buf->m_capacity = 0;
+        dlist_init(&p_buf->m_node);
     }
 
     do {

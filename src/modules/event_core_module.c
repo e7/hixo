@@ -38,7 +38,7 @@ static struct {
     -1,
     -1,
     NULL,
-    INIT_DLIST(s_event_core_private, m_app_ctx_list),
+    INIT_DLIST(s_event_core_private.m_app_ctx_list),
 };
 
 static hixo_core_module_ctx_t s_event_core_ctx = {

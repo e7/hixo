@@ -17,7 +17,7 @@
 #define __BUFFER_H__
 
 
-#include "common.h"
+#include "list.h"
 
 
 typedef struct {
@@ -25,29 +25,44 @@ typedef struct {
     ssize_t m_offset;
     ssize_t m_size;
     ssize_t m_capacity;
+    dlist_t m_node;
 } hixo_buffer_t;
 
 
-extern int hixo_create_buffer(hixo_buffer_t *p_buf, ssize_t capacity);
 static inline
-uint8_t *hixo_get_buffer_data(hixo_buffer_t *p_buf)
+uint8_t *hixo_buffer_get_data(hixo_buffer_t *p_buf)
 {
     return p_buf->mp_data;
 }
+
 static inline
 int hixo_buffer_full(hixo_buffer_t *p_buf)
 {
     return (p_buf->m_size >= p_buf->m_capacity);
 }
+
 static inline
 void hixo_buffer_clean(hixo_buffer_t *p_buf)
 {
-
+    return;
 }
-extern int hixo_expand_buffer(hixo_buffer_t *p_buf);
-static inline ssize_t hixo_get_buffer_capacity(hixo_buffer_t *p_buf)
+
+static inline
+void hixo_buffer_set_size(hixo_buffer_t *p_buf, ssize_t size)
+{
+    size = (size > 0) ? size : 0;
+    p_buf->m_size = size;
+
+    return;
+}
+
+static inline
+ssize_t hixo_buffer_get_capacity(hixo_buffer_t *p_buf)
 {
     return p_buf->m_capacity;
 }
+
+extern int hixo_create_buffer(hixo_buffer_t *p_buf, ssize_t capacity);
+extern int hixo_expand_buffer(hixo_buffer_t *p_buf);
 extern void hixo_destroy_buffer(hixo_buffer_t *p_buf);
 #endif // __BUFFER_H__

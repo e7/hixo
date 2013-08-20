@@ -34,7 +34,7 @@ static hixo_app_module_ctx_t s_simple_http_ctx = {
     &simple_http_handle_disconnect,
     sa_simple_http_srvs,
     ARRAY_COUNT(sa_simple_http_srvs),
-    INIT_DLIST(s_simple_http_ctx, m_node),
+    INIT_DLIST(s_simple_http_ctx.m_node),
 };
 
 hixo_module_t g_simple_http_module = {
@@ -70,52 +70,6 @@ void simple_http_handle_connect(hixo_socket_t *p_sock)
 
 void simple_http_handle_read(hixo_socket_t *p_sock)
 {
-    while (p_sock->m_readable) {
-        int tmp_err;
-        ssize_t left_size;
-        uint8_t *p_buf;
-        ssize_t recved_size;
-
-        hixo_buffer_clean(&p_sock->m_readbuf);
-        if (hixo_buffer_full(&p_sock->m_readbuf)) {
-            if (HIXO_ERROR == hixo_expand_buffer(&p_sock->m_readbuf)) {
-                break;
-            }
-        }
-
-        assert(!hixo_buffer_full(&p_sock->m_readbuf));
-        left_size = hixo_get_buffer_capacity(&p_sock->m_readbuf)
-                        - p_sock->m_readbuf.m_size;
-        p_buf = hixo_get_buffer_data(&p_sock->m_readbuf);
-
-        errno = 0;
-        recved_size = recv(p_sock->m_fd,
-                           &p_buf[p_sock->m_readbuf.m_size],
-                           left_size,
-                           0);
-        tmp_err = errno;
-
-        if (recved_size > 0) {
-            continue;
-        } else if (0 == recved_size) {
-            hixo_socket_close(p_sock);
-            break;
-        } else {
-            if (ECONNRESET == tmp_err) {
-                hixo_socket_close(p_sock);
-            } else {
-                if (EAGAIN != tmp_err) {
-                    (void)fprintf(stderr,
-                                  "[ERROR] recv failed: %d\n",
-                                  tmp_err);
-                }
-                p_sock->m_readable = 0U;
-                test_syn_send(p_sock);
-            }
-            break;
-        }
-    }
-
     return;
 }
 
