@@ -70,6 +70,7 @@ void simple_http_handle_connect(hixo_socket_t *p_sock)
 
 void simple_http_handle_read(hixo_socket_t *p_sock)
 {
+    test_syn_send(p_sock);
     return;
 }
 

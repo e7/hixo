@@ -143,7 +143,10 @@ void dlist_merge(dlist_t *p_head, dlist_t *p_body)
         return;
     }
 
-    dlist_add_tail(p_head, p_body->mp_next);
+    p_body->mp_next->mp_prev = p_head->mp_prev;
+    p_body->mp_prev->mp_next = p_head;
+    p_head->mp_prev->mp_next = p_body->mp_next;
+    p_head->mp_prev = p_body->mp_prev;
     dlist_init(p_body);
 
     return;

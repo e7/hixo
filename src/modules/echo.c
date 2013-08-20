@@ -74,7 +74,6 @@ void echo_handle_connect(hixo_socket_t *p_sock)
 
 void echo_handle_read(hixo_socket_t *p_sock)
 {
-    /** memory leak
     DEFINE_DLIST(old_queue);
     struct iovec *p_vecs = alloca(NBUFS * sizeof(struct iovec));
 
@@ -170,12 +169,12 @@ void echo_handle_read(hixo_socket_t *p_sock)
     }
 
     // 重拾剩余旧缓冲
-    dlist_merge(&p_sock->m_readbuf_queue, &old_queue);*/
+    dlist_merge(&p_sock->m_readbuf_queue, &old_queue);
 
-    void *buf = alloca(1024);
+    /*void *buf = alloca(1024);
     while (recv(p_sock->m_fd, buf, 1024, 0) > 0) {
     }
-    test_syn_send(p_sock);
+    test_syn_send(p_sock);*/
 
     return;
 }
