@@ -21,24 +21,23 @@
 
 
 typedef struct {
-    uint8_t *mp_data;
     ssize_t m_offset;
     ssize_t m_size;
-    ssize_t m_capacity;
     dlist_t m_node;
+    hixo_array_t m_byte_array;
 } hixo_buffer_t;
 
 
 static inline
 uint8_t *hixo_buffer_get_data(hixo_buffer_t *p_buf)
 {
-    return p_buf->mp_data;
+    return p_buf->m_byte_array.mp_data;
 }
 
 static inline
 int hixo_buffer_full(hixo_buffer_t *p_buf)
 {
-    return (p_buf->m_size >= p_buf->m_capacity);
+    return (p_buf->m_size >= p_buf->m_byte_array.m_capacity);
 }
 
 static inline
@@ -65,10 +64,10 @@ ssize_t hixo_buffer_get_size(hixo_buffer_t *p_buf)
 static inline
 ssize_t hixo_buffer_get_capacity(hixo_buffer_t *p_buf)
 {
-    return p_buf->m_capacity;
+    return p_buf->m_byte_array.m_capacity;
 }
 
 extern int hixo_create_buffer(hixo_buffer_t *p_buf, ssize_t capacity);
-extern int hixo_expand_buffer(hixo_buffer_t *p_buf);
+extern void hixo_expand_buffer(hixo_buffer_t *p_buf);
 extern void hixo_destroy_buffer(hixo_buffer_t *p_buf);
 #endif // __BUFFER_H__

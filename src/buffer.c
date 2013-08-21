@@ -16,79 +16,76 @@
 #include "buffer.h"
 
 
+void hixo_create_byte_array(hixo_array_t *p_byta_array, ssize_t capacity)
+{
+    if (capacity > 0) {
+        p_byta_array->mp_data = (uint8_t *)calloc(1, capacity);
+        p_byta_array->m_capacity = capacity;
+    } else {
+        p_byta_array->mp_data = NULL;
+        p_byta_array->m_capacity = 0;
+    }
+}
+
+void hixo_byte_array_transfer(hixo_array_t *p_recv,
+                              hixo_array_t *p_send)
+{
+    if (NULL != p_recv->mp_data) {
+        free(p_recv->mp_data);
+    }
+    p_recv->mp_data = p_send->mp_data;
+    p_recv->m_capacity = p_send->m_capacity;
+    p_send->mp_data = NULL;
+    p_send->m_capacity = 0;
+}
+
+void hixo_destroy_byte_array(hixo_array_t *p_byta_array)
+{
+    if (NULL != p_byta_array->mp_data) {
+        free(p_byta_array->mp_data);
+        p_byta_array->mp_data = NULL;
+    }
+}
+
+
 int hixo_create_buffer(hixo_buffer_t *p_buf, ssize_t capacity)
 {
-    int rslt;
-    uint8_t *p_data;
-
-    assert(NULL == p_buf->mp_data);
+    assert(NULL == p_buf->m_byte_array.mp_data);
     if (capacity < 0) {
         goto ERROR;
     } else if (capacity > 0) {
-        p_data = (uint8_t *)calloc(1, capacity);
-        if (NULL == p_data) {
-            goto ERROR;
-        }
-
-        p_buf->mp_data = p_data;
+        hixo_create_byte_array(&p_buf->m_byte_array, capacity);
         p_buf->m_offset = 0;
         p_buf->m_size = 0;
-        p_buf->m_capacity = capacity;
         dlist_init(&p_buf->m_node);
     } else {
-        p_buf->mp_data = NULL;
+        hixo_create_byte_array(&p_buf->m_byte_array, 0);
         p_buf->m_offset = 0;
         p_buf->m_size = 0;
-        p_buf->m_capacity = 0;
         dlist_init(&p_buf->m_node);
     }
 
-    do {
-        rslt = HIXO_OK;
-        break;
+    return HIXO_OK;
 
 ERROR:
-        rslt = HIXO_ERROR;
-        break;
-    } while (0);
-
-    return rslt;
+    return HIXO_ERROR;
 }
 
-int hixo_expand_buffer(hixo_buffer_t *p_buf)
+void hixo_expand_buffer(hixo_buffer_t *p_buf)
 {
-    int rslt;
-    uint8_t *p_data = NULL;
-    ssize_t data_size = 2 * p_buf->m_capacity;
+    hixo_array_t tmp_array;
+    ssize_t data_size = 2 * p_buf->m_byte_array.m_capacity;
 
-    assert(p_buf->m_capacity > 0);
-    p_data = (uint8_t *)calloc(1, data_size);
-    if (NULL == p_data) {
-        goto ERROR;
-    }
+    assert(data_size > 0);
+    hixo_create_byte_array(&tmp_array, data_size);
+    hixo_byte_array_transfer(&p_buf->m_byte_array, &tmp_array);
 
-    (void)memcpy(p_data, p_buf->mp_data, p_buf->m_size);
-    free(p_buf->mp_data);
-    p_buf->mp_data = p_data;
-    p_buf->m_capacity = data_size;
-
-    do {
-        rslt = HIXO_OK;
-        break;
-
-ERROR:
-        rslt = HIXO_ERROR;
-        break;
-    } while (0);
-
-    return rslt;
+    return;
 }
 
 void hixo_destroy_buffer(hixo_buffer_t *p_buf)
 {
-    assert(NULL != p_buf->mp_data);
-    free(p_buf->mp_data);
-    p_buf->mp_data = NULL;
+    hixo_destroy_byte_array(&p_buf->m_byte_array);
 
     return;
 }

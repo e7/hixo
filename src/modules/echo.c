@@ -207,37 +207,38 @@ void echo_handle_disconnect(hixo_socket_t *p_sock)
 
 void test_syn_send(hixo_socket_t *p_sock)
 {
-/*    static uint8_t data_head[] = "HTTP/1.1 200 OK\r\n"
-                                 "Server: hixo\r\n"
-                                 "Content-Length: %s\r\n"
-                                 "Content-Type: text/html\r\n"
-                                 "Connection: keep-alive\r\n\r\n";
+    static char const data_head[] = "HTTP/1.1 200 OK\r\n"
+                                    "Server: hixo\r\n"
+                                    "Content-Length: %s\r\n"
+                                    "Content-Type: text/html\r\n"
+                                    "Connection: keep-alive\r\n\r\n";
+    static char data_head_send[256] = {};
 
     intptr_t tmp_err;
-    ssize_t sent_size;
     struct iovec iovs[2];
     char len[32] = {};
-    uint8_t *p_data_head = alloca(256);
+    ssize_t sent_size = 0;
+    hixo_buffer_t *p_buf;
 
-    (void)snprintf(len, 32, "%s", hixo_buffer_get_size(CONTAINER_OF(p_sock->m_readbuf_queue.mp_next, hixo_buffer_t, m_node)));
-    (void)snprintf(p_data_head, 256, data_head, len);
-    sent_size = 0;
-    iovs[0].iov_base = data_head;
-    iovs[0].iov_len = sizeof(data_head);
-    iovs[1].iov_base = data_body;
-    iovs[1].iov_len = sizeof(data_body);
-    while (sent_size < sizeof(data_head) + sizeof(data_body)) {
+    p_buf = CONTAINER_OF(p_sock->m_readbuf_queue.mp_next, hixo_buffer_t, m_node);
+    (void)snprintf(len, 32, "%d", hixo_buffer_get_size(p_buf));
+    (void)snprintf(data_head_send, 256, data_head, len);
+    iovs[0].iov_base = data_head_send;
+    iovs[0].iov_len = strlen(data_head_send);
+    iovs[1].iov_base = hixo_buffer_get_data(p_buf);
+    iovs[1].iov_len = hixo_buffer_get_size(p_buf);
+    while (sent_size < iovs[0].iov_len + iovs[1].iov_len) {
         ssize_t tmp_sent;
 
         errno = 0;
         tmp_sent = writev(p_sock->m_fd, iovs, 2);
         tmp_err = errno;
         if (tmp_err) {
-            return;
+            break;
         } else {
             sent_size += tmp_sent;
         }
-    }*/
+    }
 
     hixo_socket_shutdown(p_sock);
     hixo_socket_close(p_sock);

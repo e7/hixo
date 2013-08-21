@@ -21,11 +21,6 @@
 
 
 typedef struct {
-    uint8_t *mp_data;
-    ssize_t m_len;
-} hixo_array_t;
-
-typedef struct {
     char *mp_str;
     ssize_t m_size;
     hixo_array_t *mp_buf;

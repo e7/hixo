@@ -48,6 +48,16 @@ extern "C" {
 
 typedef volatile uintptr_t atomic_t;
 
+typedef struct {
+    uint8_t *mp_data;
+    ssize_t m_capacity;
+} hixo_array_t;
+extern void hixo_create_byte_array(hixo_array_t *p_byta_array,
+                                   ssize_t capacity);
+extern void hixo_byte_array_transfer(hixo_array_t *p_recv,
+                                     hixo_array_t *p_send);
+extern void hixo_destroy_byte_array(hixo_array_t *p_byta_array);
+
 
 #define FALSE           0
 #define TRUE            (!FALSE)
