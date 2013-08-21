@@ -239,8 +239,6 @@ void test_syn_send(hixo_socket_t *p_sock)
         }
     }*/
 
-    do {
-    } while (0);
     hixo_socket_shutdown(p_sock);
     hixo_socket_close(p_sock);
 

@@ -15,9 +15,15 @@
 
 #include "adv_string.h"
 
+
+static int strreverse(char *p_str, ssize_t start, ssize_t end);
+//static int itostr(intptr_t num, char *p_rslt, ssize_t n);
+//static int strtoi(char const *pc_str, ssize_t n, intptr_t *p_value);
+
+
 int strreverse(char *p_str, ssize_t start, ssize_t end)
 {
-    int rslt;
+    int rslt = 0;
 
     if ((NULL == p_str) || (start < 0) || (end < 0)) {
         return -1;
@@ -44,8 +50,8 @@ int strreverse(char *p_str, ssize_t start, ssize_t end)
 
 int itostr(intptr_t num, char *p_rslt, ssize_t n)
 {
-    ssize_t start;
-    ssize_t end;
+    ssize_t start = 0;
+    ssize_t end = 0;
 
     if ((NULL == p_rslt) || ((n - 1) < 1)) {
         return -1;
@@ -79,11 +85,35 @@ int itostr(intptr_t num, char *p_rslt, ssize_t n)
     return 0;
 }
 
-int strtoi(char const *pc_str, ssize_t n, intptr_t *p_rslt)
+int strtoi(char const *pc_str, ssize_t n, intptr_t *p_value)
 {
-    if ((NULL == pc_str) || (NULL == p_rslt) || (n < 1)) {
+    int rslt = 0;
+    intptr_t value = 0;
+    ssize_t start = 0;
+    uint8_t const *pc_tmp_str = NULL;
+
+    if ((NULL == pc_str) || (NULL == p_value) || (n < 1)) {
         return -1;
     }
 
-    return 0;
+    pc_tmp_str = (uint8_t const *)pc_str;
+    if ('-' == pc_tmp_str[0]) {
+        start = 1;
+    } else {
+        start = 0;
+    }
+
+    for (int i = start; i < n; ++i) {
+        if ((pc_tmp_str[i] > '9') || (pc_tmp_str[i] < '0')) {
+            rslt = -1;
+            break;
+        }
+
+        value = value * 10 + (pc_tmp_str[i] - '0');
+    }
+    if (0 == rslt) {
+        *p_value = (start) ? (0 - value) : (value);
+    }
+
+    return rslt;
 }
