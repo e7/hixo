@@ -1,0 +1,23 @@
+which aclocal
+if [ 0 != $? ]; then
+    exit 1
+fi
+aclocal
+
+which autoconf
+if [ 0 != $? ]; then
+    exit 1
+fi
+autoconf
+
+which markdown
+if [ 0 != $? ]; then
+    exit 1
+fi
+markdown README.md > README
+
+which automake
+if [ 0 != $? ]; then
+    exit 1
+fi
+automake --add-missing
