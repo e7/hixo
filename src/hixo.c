@@ -93,7 +93,9 @@ static void fall_into_daemon(void)
     // signal(SIGHUP, SIG_IGN);
 
     (void)umask(0);
-    (void)chdir("/");
+    if (-1 == chdir("/")) {
+        (void)fprintf(stderr, "[WARNING] chdir to / failed\n");
+    }
     fd = open("/dev/null", O_RDWR);
     if (-1 != fd) {
         (void)dup2(fd, STDIN_FILENO);

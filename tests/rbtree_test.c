@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
     if (!tmp)
         perror("Allocate dynamic memory");
 
-    scanf("%d", &tmp->num);
+    while (!scanf("%d", &tmp->num));
 
     ret = my_insert(&mytree, tmp);
     if (ret < 0) {
