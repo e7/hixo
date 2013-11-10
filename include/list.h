@@ -25,6 +25,20 @@ extern "C" {
 // 单链表
 typedef intptr_t list_t;
 
+static inline void list_add(list_t **head, list_t *node)
+{
+    *node = (list_t)*head;
+    *head = node;
+}
+
+static inline void list_remove(list_t **node)
+{
+    list_t *p_del = *node;
+
+    *node = (list_t *)**node;
+    *p_del = 0;
+}
+
 static inline
 void add_node(list_t **pp_list, list_t *p_node)
 {
