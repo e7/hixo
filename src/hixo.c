@@ -395,7 +395,8 @@ EXIT:
     return rslt;
 }
 
-#if 1
+#define RUN 0
+#if 1 == RUN
 int main(int argc, char *argv[])
 {
     int rslt;
@@ -410,7 +411,7 @@ int main(int argc, char *argv[])
 ERR_SYSCONF:
     return rslt;
 }
-#else
+#elif 2 == RUN
 int main(int argc, char *argv[])
 {
     int rslt;
@@ -430,5 +431,19 @@ int main(int argc, char *argv[])
     // eixt framework
 
     return rslt;
+}
+#else
+int main(int argc, char *argv[])
+{
+    hixo_mempool_t mempool;
+    hixo_pool_t *ops = NULL;
+
+    mempool_init(&mempool);
+    ops = GET_INTERFACE(&mempool, hixo_pool_t, 0);
+    hixo_call_pool_new(ops, &mempool, 0, 0);
+    hixo_call_pool_del(ops, &mempool);
+    mempool_exit(&mempool);
+
+    return 0;
 }
 #endif

@@ -13,16 +13,16 @@
 // limitations under the License.
 
 
+#ifndef __HIXO_H__
+#define __HIXO_H__
+
+
 #include "conf.h"
 #include "spinlock.h"
 #include "resource.h"
 #include "socket.h"
 #include "list.h"
 #include "buffer.h"
-
-
-#ifndef __HIXO_H__
-#define __HIXO_H__
 
 
 typedef enum {

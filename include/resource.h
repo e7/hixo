@@ -37,4 +37,42 @@ extern int create_resource(hixo_resource_t *p_rsc,
 extern void *alloc_resource(hixo_resource_t *p_rsc);
 extern void free_resource(hixo_resource_t *p_rsc, void *p_elemt);
 extern void destroy_resource(hixo_resource_t *p_rsc);
+
+
+/////////////////////////////////////////////////////////////////////
+#define DECLARE_VFTS void **__vfts__
+#define SET_VFTS_VALUE(obj, value) (obj)->__vfts__ = value
+#define GET_INTERFACE(obj, interface, index) \
+            ((interface *)(obj)->__vfts__[index])
+
+
+typedef struct {
+    void *(*__new__)(void *pool, ssize_t element_size, ssize_t count);
+    void (*__del__)(void *pool);
+} hixo_pool_t;
+
+static inline
+void *hixo_call_pool_new(hixo_pool_t *pool,
+                         void *obj,
+                         ssize_t element_size,
+                         ssize_t count)
+{
+    return (*pool->__new__)(obj, element_size, count);
+}
+
+static inline
+void hixo_call_pool_del(hixo_pool_t *pool, void *obj)
+{
+    (*pool->__del__)(obj);
+
+    return;
+}
+
+// mempool
+typedef struct {
+    void *__data__;
+    DECLARE_VFTS;
+} hixo_mempool_t;
+extern int mempool_init(hixo_mempool_t *mempool);
+extern void mempool_exit(hixo_mempool_t *mempool);
 #endif // __RESOURCE_H__
