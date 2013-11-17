@@ -58,18 +58,22 @@ typedef struct {
 } hixo_pool_t;
 
 static inline
-void *hixo_call_pool_new(hixo_pool_t *pool,
-                         void *obj,
+void *hixo_call_pool_new(void *obj,
+                         intptr_t offset,
                          ssize_t element_size,
                          ssize_t count)
 {
-    return (*pool->__new__)(obj, element_size, count);
+    hixo_pool_t *ops = GET_INTERFACE(obj, offset, hixo_pool_t, 0);
+
+    return (*ops->__new__)(obj, element_size, count);
 }
 
 static inline
-void hixo_call_pool_del(hixo_pool_t *pool, void *obj)
+void hixo_call_pool_del(void *obj, intptr_t offset)
 {
-    (*pool->__del__)(obj);
+    hixo_pool_t *ops = GET_INTERFACE(obj, offset, hixo_pool_t, 0);
+
+    (*ops->__del__)(obj);
 
     return;
 }

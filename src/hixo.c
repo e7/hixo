@@ -435,9 +435,8 @@ int main(int argc, char *argv[])
 #else
 static void test_pool_interface(void *obj, intptr_t offset)
 {
-    hixo_pool_t *ops = GET_INTERFACE(obj, offset, hixo_pool_t, 0);
-    hixo_call_pool_new(ops, obj, 0, 0);
-    hixo_call_pool_del(ops, obj);
+    hixo_call_pool_new(obj, offset, 0, 0);
+    hixo_call_pool_del(obj, offset);
 }
 
 int main(int argc, char *argv[])
