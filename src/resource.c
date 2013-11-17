@@ -155,10 +155,10 @@ static void *__mempool_new__(void *pool, ssize_t element_size, ssize_t count)
     fprintf(stderr, "__mempool_new__\n");
     return NULL;
 }
-static void *__mempool_del__(void *pool)
+static void __mempool_del__(void *pool)
 {
     fprintf(stderr, "__mempool_del__\n");
-    return NULL;
+    return;
 }
 static hixo_pool_t __i_pool_mempool__ = {
     &__mempool_new__,
@@ -169,7 +169,7 @@ static void *__mempool_vfts__[] = {
 };
 int mempool_init(hixo_mempool_t *mempool)
 {
-    SET_VFTS_VALUE(mempool, __mempool_vfts__);
+    SET_VFTS_VALUE(mempool, VFTS_OFFSET(hixo_mempool_t), __mempool_vfts__);
     return 0;
 }
 void mempool_exit(hixo_mempool_t *mempool)

@@ -433,15 +433,19 @@ int main(int argc, char *argv[])
     return rslt;
 }
 #else
+static void test_pool_interface(void *obj, intptr_t offset)
+{
+    hixo_pool_t *ops = GET_INTERFACE(obj, offset, hixo_pool_t, 0);
+    hixo_call_pool_new(ops, obj, 0, 0);
+    hixo_call_pool_del(ops, obj);
+}
+
 int main(int argc, char *argv[])
 {
     hixo_mempool_t mempool;
-    hixo_pool_t *ops = NULL;
 
     mempool_init(&mempool);
-    ops = GET_INTERFACE(&mempool, hixo_pool_t, 0);
-    hixo_call_pool_new(ops, &mempool, 0, 0);
-    hixo_call_pool_del(ops, &mempool);
+    test_pool_interface(&mempool, VFTS_OFFSET(hixo_mempool_t));
     mempool_exit(&mempool);
 
     return 0;

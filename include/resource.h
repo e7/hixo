@@ -40,10 +40,16 @@ extern void destroy_resource(hixo_resource_t *p_rsc);
 
 
 /////////////////////////////////////////////////////////////////////
-#define DECLARE_VFTS void **__vfts__
-#define SET_VFTS_VALUE(obj, value) (obj)->__vfts__ = value
-#define GET_INTERFACE(obj, interface, index) \
-            ((interface *)(obj)->__vfts__[index])
+#define __VFTS__ __vfts__
+#define DECLARE_VFTS void **__VFTS__
+#define VFTS_OFFSET(objtype) OFFSET_OF(objtype, __VFTS__)
+
+#define __REF_VFTS__(obj, vfts_offset) \
+            (*(void ***)((uint8_t *)obj + vfts_offset))
+#define SET_VFTS_VALUE(obj, vfts_offset, value) \
+            __REF_VFTS__(obj, vfts_offset) = value
+#define GET_INTERFACE(obj, vfts_offset, interface, index) \
+            ((interface *)__REF_VFTS__(obj, vfts_offset)[index])
 
 
 typedef struct {
