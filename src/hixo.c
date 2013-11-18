@@ -447,6 +447,17 @@ int main(int argc, char *argv[])
     test_pool_interface(&mempool, VFTS_OFFSET(hixo_mempool_t));
     mempool_exit(&mempool);
 
+    printf("%d\n", ABS(0));
+    printf("%d\n", ABS(1));
+    printf("%d\n", ABS(-1));
+    printf("%d\n", (~(uint32_t)0) >> 1);
+    printf("%ld\n", count_places(1));
+    printf("%ld\n", count_places(12));
+    printf("%ld\n", count_places(123));
+    printf("%ld\n", count_places(1234));
+    printf("%ld\n", count_places(12345));
+    printf("%ld\n", count_places(-1234567890));
+
     return 0;
 }
 #endif
