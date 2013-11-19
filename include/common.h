@@ -46,6 +46,19 @@ extern "C" {
 #endif // __cplusplus
 
 
+#define __UINT_ZOOO__ (~(uintptr_t)0 >> 1)
+#define INTEGER_MAX ((intptr_t)__UINT_ZOOO__)
+#define INTEGER_MIN ((intptr_t)~__UINT_ZOOO__)
+
+#if BITS_32
+#define STR_INTEGER_MAX "2147483647"
+#define STR_INTEGER_MIN "-2147483648"
+#else
+#define STR_INTEGER_MAX "9223372036854775807"
+#define STR_INTEGER_MIN "-9223372036854775808"
+#endif
+
+
 typedef volatile uintptr_t atomic_t;
 
 typedef struct {
@@ -72,9 +85,20 @@ extern void hixo_destroy_byte_array(hixo_array_t *p_byta_array);
                 (type *)((uint8_t *)p_mptr - OFFSET_OF(type, member));\
              })
 
-#define ABS(x)              (((x) > 0) ? (x) : (-x))
 #define MIN(a, b)           (((a) > (b)) ? (b) : (a))
 #define MAX(a, b)           (((a) < (b)) ? (b) : (a))
+
+static inline
+intptr_t abs_value(intptr_t num)
+{
+    if (INTEGER_MIN == num) {
+        return -1;
+    } else if (num > 0) {
+        return num;
+    } else {
+        return -num;
+    }
+}
 
 static inline
 intptr_t count_places(intptr_t num)
@@ -85,7 +109,7 @@ intptr_t count_places(intptr_t num)
         9999999,
         99999999,
         999999999, // 9
-    #if BITS_64
+    #if !BITS_32
         9999999999, // 10
         99999999999,
         999999999999,
@@ -102,7 +126,13 @@ intptr_t count_places(intptr_t num)
     intptr_t start = 0;
     intptr_t middle = 0;
     intptr_t end = ARRAY_COUNT(places_max);
-    intptr_t positive = ABS(num);
+    intptr_t positive = 0;
+
+    if (INTEGER_MIN == num) {
+        positive = abs_value(num + 1);
+    } else {
+        positive = abs_value(num);
+    }
 
     while (start < end) {
         middle = start + (end - start) / 2;
@@ -120,6 +150,54 @@ intptr_t count_places(intptr_t num)
     }
 
     return rslt;
+}
+
+static inline
+void __str_reverse__(char str[], ssize_t len)
+{
+    for (int i = 0, j = len - 1; i < j; ++i, --j) {
+        char tmp = str[i];
+
+        str[i] = str[j];
+        str[j] = tmp;
+    }
+}
+
+static inline
+char const *wtoa(intptr_t num, ssize_t places, char buf[], ssize_t len)
+{
+    intptr_t value = abs_value(num);
+    ssize_t end = 0;
+
+    if (places > len - 1) {
+        return NULL;
+    }
+
+    if (INTEGER_MIN == num) {
+        (void)strncpy(buf, STR_INTEGER_MIN, sizeof(STR_INTEGER_MIN) - 1);
+
+        return buf;
+    }
+
+    if (0 == value) {
+        buf[end++] = '0';
+    } else {
+        while (value > 0) {
+            intptr_t next_value = value / 10;
+
+            buf[end++] = value - next_value * 10 + '0';
+            value = next_value;
+        }
+
+        if (num < 0) {
+            buf[end++] = '-';
+        }
+
+        __str_reverse__(buf, end);
+    }
+    buf[end] = 0;
+
+    return buf;
 }
 
 #ifndef ESUCCESS

@@ -221,7 +221,11 @@ void test_syn_send(hixo_socket_t *p_sock)
     hixo_buffer_t *p_buf;
 
     p_buf = CONTAINER_OF(p_sock->m_readbuf_queue.mp_next, hixo_buffer_t, m_node);
+#if BITS_32
     (void)snprintf(len, 32, "%d", hixo_buffer_get_size(p_buf));
+#else
+    (void)snprintf(len, 32, "%ld", hixo_buffer_get_size(p_buf));
+#endif
     (void)snprintf(data_head_send, 256, data_head, len);
     iovs[0].iov_base = data_head_send;
     iovs[0].iov_len = strlen(data_head_send);

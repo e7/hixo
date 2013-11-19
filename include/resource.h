@@ -48,7 +48,7 @@ extern void destroy_resource(hixo_resource_t *p_rsc);
             (*(void ***)((uint8_t *)obj + vfts_offset))
 #define SET_VFTS_VALUE(obj, vfts_offset, value) \
             __REF_VFTS__(obj, vfts_offset) = value
-#define GET_INTERFACE(obj, vfts_offset, interface, index) \
+#define GET_INTERFACE(obj, vfts_offset, index, interface) \
             ((interface *)__REF_VFTS__(obj, vfts_offset)[index])
 
 
@@ -60,18 +60,19 @@ typedef struct {
 static inline
 void *hixo_call_pool_new(void *obj,
                          intptr_t offset,
+                         intptr_t index,
                          ssize_t element_size,
                          ssize_t count)
 {
-    hixo_pool_t *ops = GET_INTERFACE(obj, offset, hixo_pool_t, 0);
+    hixo_pool_t *ops = GET_INTERFACE(obj, offset, index, hixo_pool_t);
 
     return (*ops->__new__)(obj, element_size, count);
 }
 
 static inline
-void hixo_call_pool_del(void *obj, intptr_t offset)
+void hixo_call_pool_del(void *obj, intptr_t offset, intptr_t index)
 {
-    hixo_pool_t *ops = GET_INTERFACE(obj, offset, hixo_pool_t, 0);
+    hixo_pool_t *ops = GET_INTERFACE(obj, offset, index, hixo_pool_t);
 
     (*ops->__del__)(obj);
 
@@ -79,6 +80,9 @@ void hixo_call_pool_del(void *obj, intptr_t offset)
 }
 
 // mempool
+enum {
+    ITFC_INDEX_MEMPOOL_POOL = 0,
+};
 typedef struct {
     void *__data__;
     DECLARE_VFTS;

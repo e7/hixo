@@ -4,8 +4,8 @@ AM_INIT_AUTOMAKE
 AC_DEFINE([_GNU_SOURCE])
 AC_CHECK_SIZEOF([long])
 AS_IF([test "$ac_cv_sizeof_long" -eq 4],
-          [AC_DEFINE([BITS_64], [0])],
-          [AC_DEFINE([BITS_64], [1])])
+          [AC_DEFINE([BITS_32], [1])],
+          [AC_DEFINE([BITS_32], [0])])
 AC_PROG_CC([cc])
 AM_PROG_CC_C_O
 AC_CONFIG_SRCDIR([src/hixo.c])

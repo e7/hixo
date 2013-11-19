@@ -435,8 +435,8 @@ int main(int argc, char *argv[])
 #else
 static void test_pool_interface(void *obj, intptr_t offset)
 {
-    hixo_call_pool_new(obj, offset, 0, 0);
-    hixo_call_pool_del(obj, offset);
+    hixo_call_pool_new(obj, offset, ITFC_INDEX_MEMPOOL_POOL, 0, 0);
+    hixo_call_pool_del(obj, offset, ITFC_INDEX_MEMPOOL_POOL);
 }
 
 int main(int argc, char *argv[])
@@ -447,16 +447,28 @@ int main(int argc, char *argv[])
     test_pool_interface(&mempool, VFTS_OFFSET(hixo_mempool_t));
     mempool_exit(&mempool);
 
-    printf("%d\n", ABS(0));
-    printf("%d\n", ABS(1));
-    printf("%d\n", ABS(-1));
-    printf("%d\n", (~(uint32_t)0) >> 1);
     printf("%ld\n", count_places(1));
     printf("%ld\n", count_places(12));
     printf("%ld\n", count_places(123));
     printf("%ld\n", count_places(1234));
     printf("%ld\n", count_places(12345));
     printf("%ld\n", count_places(-1234567890));
+    printf("%ld\n", count_places(9223372036854775807));
+    printf("%ld\n", count_places(-9223372036854775807));
+    printf("=================================\n");
+
+    {
+        intptr_t xs = INTEGER_MAX;
+        intptr_t ys = INTEGER_MIN;
+        intptr_t zs = 0;
+        ssize_t len = count_places(xs);
+
+        char *buf = (char *)malloc(len + 1);
+        printf("%s\n", wtoa(xs, len, buf, len + 1));
+        printf("%s\n", wtoa(ys, len, buf, len + 1));
+        printf("%s\n", wtoa(zs, len, buf, len + 1));
+        free(buf);
+    }
 
     return 0;
 }
