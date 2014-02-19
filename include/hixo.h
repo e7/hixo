@@ -68,6 +68,7 @@ typedef struct {
 
 typedef struct {
     pid_t m_pid;
+    intptr_t m_cpuid;
     int m_power;
     int m_tunnel[2];
 } hixo_ps_info_t;

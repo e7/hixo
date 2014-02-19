@@ -271,27 +271,6 @@ static int worker_main(int cpu_id)
 {
     int rslt;
     cpu_set_t cpuset;
-    sigset_t filled_mask;
-    struct sigaction sa;
-
-    // 信号处理
-    (void)sigfillset(&filled_mask);
-
-    sa.sa_mask = filled_mask;
-    sa.sa_flags = 0;
-    sa.sa_handler = &sig_int_handler_worker;
-    if (-1 == sigaction(SIGINT, &sa, NULL)) {
-        rslt = HIXO_ERROR;
-        goto EXIT;
-    }
-
-    sa.sa_mask = filled_mask;
-    sa.sa_flags = 0;
-    sa.sa_handler = &sig_alarm_handler_worker;
-    if (-1 == sigaction(SIGALRM, &sa, NULL)) {
-        rslt = HIXO_ERROR;
-        goto EXIT;
-    }
 
     // 绑定CPU
     CPU_ZERO(&cpuset);
@@ -304,29 +283,69 @@ static int worker_main(int cpu_id)
         rslt = worker_main_core();
     }
 
-EXIT:
     return rslt;
+}
+
+pid_t hixo_spawn_workers(intptr_t n_workers)
+{
+    pid_t cpid = -1; // 子进程id
+    sigset_t filled_mask;
+    sigset_t old_mask;
+
+    // 屏蔽所有信号
+    (void)sigfillset(&filled_mask);
+    (void)sigprocmask(SIG_SETMASK, &filled_mask, &old_mask);
+
+    for (intptr_t i = 0; i < n_workers; ++i) {
+        cpid = fork();
+
+        if (-1 == cpid) {
+            (void)fprintf(stderr, "[ERROR] fork() failed\n");
+            break;
+        }
+
+        if (cpid > 0) {
+            ga_pss_info[i].m_cpuid = i % g_sysconf.M_NCPUS;
+            ga_pss_info[i].m_pid = cpid;
+            gp_ps_info = &ga_pss_info[i];
+            break;
+        }
+    }
+
+    // 恢复master进程信号屏蔽字
+    if (0 == cpid) {
+        (void)sigprocmask(SIG_SETMASK, &old_mask, NULL);
+    }
+
+    return cpid;
 }
 
 int hixo_main(void)
 {
-    int rslt;
-    int cpu_id = -1;
+    int rslt = HIXO_OK;
     hixo_conf_t *p_conf;
+    intptr_t i = 0;
+    pid_t cpid;
 
-    rslt = HIXO_OK;
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
+    for (i = 0; NULL != gap_modules[i]; ++i) {
         if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
             continue;
         }
+
         if (NULL == gap_modules[i]->mpf_init_master) {
             continue;
         }
+
         rslt = (*gap_modules[i]->mpf_init_master)();
+        if (HIXO_ERROR == rslt) {
+            break;
+        }
     }
     if (HIXO_ERROR == rslt) {
         goto EXIT;
     }
+
+    // 获取配置
     p_conf = g_rt_ctx.mp_conf;
 
     // 守护进程
@@ -336,54 +355,21 @@ int hixo_main(void)
 
     // 分裂进程
     assert(p_conf->m_worker_processes < HIXO_MAX_PSS);
-    for (int i = 0; i < p_conf->m_worker_processes; ++i) {
-        if (-1 == socketpair(AF_UNIX,
-                             SOCK_STREAM,
-                             0,
-                             ga_pss_info[i].m_tunnel))
-        {
-            (void)fprintf(stderr, "[ERROR] socketpair() failed\n");
-            break;
-        }
+    cpid = hixo_spawn_workers(p_conf->m_worker_processes);
+    if (-1 == cpid) {
+        goto EXIT;
+    } else if (0 == cpid) {
+        assert(NULL == gp_ps_info);
 
-        pid_t cpid = fork();
-        if (-1 == cpid) {
-            (void)fprintf(stderr, "[ERROR] fork() failed\n");
-            break;
-        } else if (0 == cpid) {
-            cpu_id = i % g_sysconf.M_NCPUS;
-
-            gp_ps_info = &ga_pss_info[i];
-            ga_pss_info[i].m_pid = getpid();
-            gp_ps_info->m_power = p_conf->m_max_connections
-                                      - (p_conf->m_max_connections / 8);
-
-            break;
-        } else {
-            ++g_child_count;
-
-            assert(NULL == gp_ps_info);
-            ga_pss_info[i].m_pid = cpid;
-            continue;
-        }
-    }
-
-    if (NULL != gp_ps_info) {
-        (void)close(gp_ps_info->m_tunnel[0]);
-        rslt = worker_main(cpu_id);
-        (void)close(gp_ps_info->m_tunnel[1]);
-    } else {
-        for (int i = 0; i < p_conf->m_worker_processes; ++i) {
-            (void)close(ga_pss_info[i].m_tunnel[1]);
-        }
         rslt = master_main();
-        for (int i = 0; i < p_conf->m_worker_processes; ++i) {
-            (void)close(ga_pss_info[i].m_tunnel[0]);
-        }
+    } else {
+        gp_ps_info->m_power = p_conf->m_max_connections
+                                  - (p_conf->m_max_connections / 8);
+        rslt = worker_main(gp_ps_info->m_cpuid);
     }
 
 EXIT:
-    for (int i = 0; NULL != gap_modules[i]; ++i) {
+    for (i -= 1; i >= 0; --i) {
         if (HIXO_MODULE_CORE != gap_modules[i]->m_type) {
             continue;
         }
@@ -395,7 +381,7 @@ EXIT:
     return rslt;
 }
 
-#define RUN 0
+#define RUN 1
 #if 1 == RUN
 int main(int argc, char *argv[])
 {
