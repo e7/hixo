@@ -13,12 +13,38 @@
 // limitations under the License.
 
 
-#ifndef __SLUB_H__
-#define __SLUB_H__
+#include "slub.h"
 
 
-#include "common.h"
+#define BLOCK_SIZE 4096
 
 
-extern int make_slub(void *p, intptr_t size);
-#endif // __HIXO_SLUB_H__
+static intptr_t slub_objs_shift[] = {
+    3, 4, 5, 6, 7, 8, 9, 10, 11, // valid 8--2048
+};
+
+
+int make_slub(void *p, intptr_t size)
+{
+    int rslt = 0;
+    intptr_t shift = 0;
+    intptr_t bitmap = 0;
+
+    assert(NULL != p);
+    assert(size > 0);
+
+    if (size - BLOCK_SIZE < BLOCK_SIZE) {
+        goto ERROR;
+    }
+
+    shift = (size - BLOCK_SIZE) / BLOCK_SIZE;
+    bitmap = (shift + sizeof(char)) / sizeof(char);
+
+    do {
+        break;
+ERROR:
+        rslt = -1;
+    } while (0);
+
+    return rslt;
+}

@@ -8,7 +8,7 @@ AM_LDFLAGS = -lpthread -rdynamic
 
 bin_PROGRAMS = hixo
 hixo_SOURCES = adv_string.c rbtree.c buffer.c resource.c \
-			   conf.c socket.c hixo.c \
+			   conf.c socket.c hixo.c slub.c \
 			   modules/main_core_module.c \
 			   modules/event_core_module.c \
 			   modules/epoll_module.c \
