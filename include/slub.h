@@ -20,5 +20,8 @@
 #include "common.h"
 
 
+extern void mem_shift_left(uint8_t *p, intptr_t len, intptr_t n);
 extern int make_slub(void *p, intptr_t size);
+extern void dump_mem(void *p, intptr_t size);
+extern void dump_slub(void *p);
 #endif // __HIXO_SLUB_H__

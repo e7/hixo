@@ -381,7 +381,7 @@ EXIT:
     return rslt;
 }
 
-#define RUN 1
+#define RUN 0
 #if 1 == RUN
 int main(int argc, char *argv[])
 {
@@ -467,7 +467,7 @@ int main(int argc, char *argv[])
     intptr_t x[4] = {1 ,0, 0, 0};
 
     for (intptr_t i = 1; i < 150; ++i) {
-        mem_shift_left(&x, sizeof(x), i);
+        mem_shift_left(&x, sizeof(x) - 1, i);
         for (intptr_t i = 0; i < ARRAY_COUNT(x); ++i) {
             fprintf(stderr, "%d,", x[i]);
         }
@@ -477,6 +477,20 @@ int main(int argc, char *argv[])
         x[2] = 0;
         x[3] = 0;
     }
+
+    return 0;
+}
+
+#else
+
+int main(int argc, char *argv[])
+{
+    void *p;
+
+    p = malloc(16384);
+    make_slub(p, 16384);
+    dump_slub(p);
+    free(p);
 
     return 0;
 }

@@ -21,15 +21,18 @@
 
 // object type configuration, size = (1 << slub_objs_shift[i])
 static intptr_t slub_objs_shift[] = {
-    3, 4, 5, 6, 7, 8, 9, 10, 11, // ascending order
+    3, 4, 5, 6, 7, 8, 9, 10, 11 // ascending order
 };
 #define OBJ_TYPE_COUNT          ARRAY_COUNT(slub_objs_shift)
 #define MAX_OBJS_PER_BLOCK      (BLOCK_SIZE / (1 << slub_objs_shift[0]))
+#define BYTES_OF_MAX_OBJS       ((MAX_OBJS_PER_BLOCK + 8) / 8)
 
 
 typedef struct {
     intptr_t blocks;
+    char *bitmap;
     intptr_t bitmap_size;
+    char *usemap;
     intptr_t usemap_size;
 } slub_t;
 
@@ -67,33 +70,49 @@ EXIT:
 
 int make_slub(void *p, intptr_t size)
 {
-    int rslt = 0;
-    slub_t *slb = (slub_t *)p;
-    intptr_t part_bits = 0;
-    char *byte = (char *)p;
+    int rslt;
+    slub_t *slb;
+    intptr_t part_bits;
+    char *bitmap, *usemap;
 
     assert(NULL != p);
     assert(size > 0);
 
-    if ((size - BLOCK_SIZE) < (BLOCK_SIZE * OBJ_TYPE_COUNT)) {
+    if ((size - BLOCK_SIZE) < BLOCK_SIZE) {
         (void)fprintf(stderr, "[ERROR] NO ENOUGH MEM\n");
         goto ERROR;
     }
 
+    slb = (slub_t *)p;
     slb->blocks = (size - BLOCK_SIZE) / BLOCK_SIZE;
-
+    slb->bitmap = (char *)&slb[1];
     slb->bitmap_size = (slb->blocks + 8) / 8;
     assert(slb->bitmap_size > 0);
+    slb->usemap = slb->bitmap + slb->bitmap_size * (OBJ_TYPE_COUNT + 1);
+    slb->usemap_size = BYTES_OF_MAX_OBJS * slb->blocks;
+    assert(slb->usemap_size > 0);
+
+    // 初始化块归属位图
+    // 第一个bitmap用于所有块使用情况
+    bitmap = slb->bitmap;
+    (void)memset(bitmap, 0, slb->bitmap_size * (OBJ_TYPE_COUNT + 1));
     part_bits = slb->blocks % 8;
-    for (int i = 0; i < OBJ_TYPE_COUNT; ++i) {
-        byte += slb->bitmap_size;
-        byte[-1] = ((~0) << part_bits);
+    for (int i = 0; i < OBJ_TYPE_COUNT + 1; ++i) {
+        bitmap += slb->bitmap_size;
+        bitmap[-1] = ((~0) << part_bits);
     }
 
-    slb->usemap_size = (MAX_OBJS_PER_BLOCK + 8) / 8;
-    assert(slb->usemap_size > 0);
-    for (int i = 0; i < OBJ_TYPE_COUNT; ++i) {
+    // 初始化块使用位图
+    usemap = slb->usemap;
+    (void)memset(usemap, ~0, slb->usemap_size * OBJ_TYPE_COUNT);
+    for (intptr_t i = 0; i < OBJ_TYPE_COUNT; ++i) {
         part_bits = BLOCK_SIZE / (1 << slub_objs_shift[i]);
+        for (intptr_t j = 0; j < slb->blocks; ++j) {
+            uint8_t *elmt = (uint8_t *)(usemap + slb->usemap_size * i);
+
+            mem_shift_left(elmt + BYTES_OF_MAX_OBJS *j,
+                           BYTES_OF_MAX_OBJS, part_bits);
+        }
     }
 
     do {
@@ -103,4 +122,49 @@ ERROR:
     } while (0);
 
     return rslt;
+}
+
+void dump_mem(void *p, intptr_t size)
+{
+    char *seg16;
+    intptr_t segsize;
+
+    seg16 = (char *)p;
+    segsize = size;
+
+    while (segsize > 0) {
+        intptr_t max = (segsize > 16) ? 16 : segsize;
+
+        fprintf(stderr, "%p:", seg16);
+        for (intptr_t i = 0; i < max; ++i) {
+            (void)fprintf(stderr, " %02hhx", seg16[i]);
+        }
+        (void)fprintf(stderr, "\n");
+        seg16 += 16;
+        segsize -= 16;
+    }
+
+    return;
+}
+
+void dump_slub(void *p)
+{
+    slub_t *slb;
+
+    assert(NULL != p);
+
+    slb = (slub_t *)p;
+    (void)fprintf(stderr, "[DEBUG] slub: %p\n", slb);
+    (void)fprintf(stderr, "[DEBUG] slub->blocks: %d\n", slb->blocks);
+    (void)fprintf(stderr, "[DEBUG] slub->bitmap: %p\n", slb->bitmap);
+    (void)fprintf(stderr, "[DEBUG] slub->bitmap_size: %d\n", slb->bitmap_size);
+    (void)fprintf(stderr, "[DEBUG] slub->usemap: %p\n", slb->usemap);
+    (void)fprintf(stderr, "[DEBUG] slub->usemap_size: %d\n", slb->usemap_size);
+
+    (void)fprintf(stderr, "[DEBUG] slub->bitmap context:\n");
+    dump_mem(slb->bitmap, slb->bitmap_size * OBJ_TYPE_COUNT);
+    (void)fprintf(stderr, "[DEBUG] slub->usemap context:\n");
+    dump_mem(slb->usemap, slb->usemap_size * OBJ_TYPE_COUNT);
+
+    return;
 }
