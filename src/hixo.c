@@ -418,7 +418,7 @@ int main(int argc, char *argv[])
 
     return rslt;
 }
-#else
+#elif 3 == RUN
 static void test_pool_interface(void *obj, intptr_t offset)
 {
     hixo_call_pool_new(obj, offset, ITFC_INDEX_MEMPOOL_POOL, 0, 0);
@@ -458,4 +458,27 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
+#elif 4 == RUN
+
+// mem_shift_left test
+int main(int argc, char *argv[])
+{
+    intptr_t x[4] = {1 ,0, 0, 0};
+
+    for (intptr_t i = 1; i < 150; ++i) {
+        mem_shift_left(&x, sizeof(x), i);
+        for (intptr_t i = 0; i < ARRAY_COUNT(x); ++i) {
+            fprintf(stderr, "%d,", x[i]);
+        }
+        fprintf(stderr, "\n", x[i]);
+        x[0] = 1;
+        x[1] = 0;
+        x[2] = 0;
+        x[3] = 0;
+    }
+
+    return 0;
+}
+
 #endif
