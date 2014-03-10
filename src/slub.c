@@ -20,12 +20,30 @@
 
 
 // object type configuration, size = (1 << slub_objs_shift[i])
-static intptr_t slub_objs_shift[] = {
-    3, 4, 5, 6, 7, 8, 9, 10, 11 // ascending order
+static struct {
+    intptr_t shift;
+    intptr_t occupy; // 一个数据块包含的obj数目
+} slub_objs_shift[] = {
+    // ascending order
+    {3, 0},
+    {4, 0},
+    {5, 0},
+    {6, 0},
+    {7, 0},
+    {8, 0},
+    {9, 0},
+    {10, 0},
+    {11, 0},
 };
 #define OBJ_TYPE_COUNT          ARRAY_COUNT(slub_objs_shift)
-#define MAX_OBJS_PER_BLOCK      (BLOCK_SIZE / (1 << slub_objs_shift[0]))
-#define BYTES_OF_MAX_OBJS       ((MAX_OBJS_PER_BLOCK + 8) / 8)
+#define MAX_OBJS_PER_BLOCK      (BLOCK_SIZE / (1 << slub_objs_shift[0].shift))
+#define BYTES_OF_MAX_OBJS       ((MAX_OBJS_PER_BLOCK + 7) / 8)
+#define RESOLV_OCCUPY()           \
+        for (intptr_t i = 0; i < OBJ_TYPE_COUNT; ++i) {\
+            intptr_t obj_size = (1 << slub_objs_shift[i].shift);\
+            slub_objs_shift[i].occupy = (BLOCK_SIZE / obj_size + 7) / 8;\
+            (void)fprintf(stderr, "%d\n", slub_objs_shift[i].occupy);\
+        }
 
 
 typedef struct {
@@ -83,10 +101,12 @@ int make_slub(void *p, intptr_t size)
         goto ERROR;
     }
 
+    RESOLV_OCCUPY();
+
     slb = (slub_t *)p;
     slb->blocks = (size - BLOCK_SIZE) / BLOCK_SIZE;
     slb->bitmap = (char *)&slb[1];
-    slb->bitmap_size = (slb->blocks + 8) / 8;
+    slb->bitmap_size = (slb->blocks + 7) / 8;
     assert(slb->bitmap_size > 0);
     slb->usemap = slb->bitmap + slb->bitmap_size * (OBJ_TYPE_COUNT + 1);
     slb->usemap_size = BYTES_OF_MAX_OBJS * slb->blocks;
@@ -106,7 +126,7 @@ int make_slub(void *p, intptr_t size)
     usemap = slb->usemap;
     (void)memset(usemap, ~0, slb->usemap_size * OBJ_TYPE_COUNT);
     for (intptr_t i = 0; i < OBJ_TYPE_COUNT; ++i) {
-        part_bits = BLOCK_SIZE / (1 << slub_objs_shift[i]);
+        part_bits = BLOCK_SIZE / (1 << slub_objs_shift[i].shift);
         for (intptr_t j = 0; j < slb->blocks; ++j) {
             uint8_t *elmt = (uint8_t *)(usemap + slb->usemap_size * i);
 
@@ -162,7 +182,7 @@ void dump_slub(void *p)
     (void)fprintf(stderr, "[DEBUG] slub->usemap_size: %d\n", slb->usemap_size);
 
     (void)fprintf(stderr, "[DEBUG] slub->bitmap context:\n");
-    dump_mem(slb->bitmap, slb->bitmap_size * OBJ_TYPE_COUNT);
+    dump_mem(slb->bitmap, slb->bitmap_size * (OBJ_TYPE_COUNT + 1));
     (void)fprintf(stderr, "[DEBUG] slub->usemap context:\n");
     dump_mem(slb->usemap, slb->usemap_size * OBJ_TYPE_COUNT);
 
