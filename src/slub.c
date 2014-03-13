@@ -138,7 +138,7 @@ int make_slub(void *p, intptr_t size)
 
     // 初始化块使用位图
     usemap = slb->usemap;
-    (void)memset(usemap, ~0, slb->usemap_size * obj_type_count);
+    (void)memset(usemap, ~0, slb->usemap_size * slb->blocks);
     for (intptr_t i = 0; i < slb->blocks; ++i) {
         intptr_t offset = 0;
 
@@ -146,9 +146,9 @@ int make_slub(void *p, intptr_t size)
             uint8_t *base;
             intptr_t occupy_len = ((slub_objs_shift[j].occupy +7) / 8);
 
-            offset += occupy_len;
             base = (uint8_t *)(usemap + slb->usemap_size * i + offset);
             mem_shift_left(base, occupy_len, slub_objs_shift[j].occupy);
+            offset += occupy_len;
         }
     }
 
@@ -202,7 +202,7 @@ void dump_slub(void *p)
     assert(obj_type_count > 0);
     dump_mem(slb->bitmap, slb->bitmap_size * (obj_type_count + 1));
     (void)fprintf(stderr, "[DEBUG] slub->usemap context:\n");
-    dump_mem(slb->usemap, slb->usemap_size * obj_type_count);
+    dump_mem(slb->usemap, slb->usemap_size * slb->blocks);
 
     return;
 }
