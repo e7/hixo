@@ -20,8 +20,14 @@
 #include "common.h"
 
 
+// 内存块左移
 extern void mem_shift_left(uint8_t *p, intptr_t len, intptr_t n);
-extern int make_slub(void *p, intptr_t size);
-extern void dump_mem(void *p, intptr_t size);
+
+// 用户接口
+extern intptr_t make_slub(void *p, intptr_t size);
+extern void *slub_alloc(void *p, intptr_t obj_size);
+extern void slub_free(void *p, void *obj, intptr_t obj_size);
+
+// 打印slub内存信息
 extern void dump_slub(void *p);
 #endif // __HIXO_SLUB_H__

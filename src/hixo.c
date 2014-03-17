@@ -485,14 +485,16 @@ int main(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+#define MEMSIZE 4096 * 33
     void *p;
 
-    p = malloc(16384);
-    make_slub(p, 16384);
+    p = malloc(MEMSIZE);
+    make_slub(p, MEMSIZE);
     dump_slub(p);
     free(p);
 
     return 0;
+#undef MEMSIZE
 }
 
 #endif

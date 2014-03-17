@@ -16,10 +16,9 @@
 #include "slub.h"
 
 
+// 最大内存块数
+#define BLOCKS_MAX      32
 #define BLOCK_SIZE      4096
-
-// 能管理的最大内存块数
-#define BLOCKS_MAX      8
 
 
 // object type configuration, size = (1 << slub_objs_shift[i])
@@ -61,7 +60,12 @@ typedef struct {
     intptr_t bitmap_size;
     char *usemap;
     intptr_t usemap_size;
+    void *self;
 } slub_t;
+
+
+static void __dump_mem__(void *p, intptr_t size);
+
 
 // 内存左移
 void mem_shift_left(uint8_t *p, intptr_t len, intptr_t n)
@@ -95,7 +99,7 @@ EXIT:
     return;
 }
 
-int make_slub(void *p, intptr_t size)
+intptr_t make_slub(void *p, intptr_t size)
 {
     int rslt;
     slub_t *slb;
@@ -111,11 +115,16 @@ int make_slub(void *p, intptr_t size)
         goto ERROR;
     }
 
+    blocks = size / BLOCK_SIZE;
+    if (blocks >= BLOCKS_MAX) {
+        (void)fprintf(stderr, "[WARNING] TOO LARGE MEM\n");
+        blocks = BLOCKS_MAX - 1;
+    }
+
     RESOLV_OCCUPY();
 
-    blocks = (size - BLOCK_SIZE) / BLOCK_SIZE;
     slb = (slub_t *)p;
-    slb->blocks = MIN(blocks, BLOCKS_MAX);
+    slb->blocks = blocks;
     slb->bitmap = (char *)&slb[1];
     slb->bitmap_size = (slb->blocks + 7) / 8;
     assert(slb->bitmap_size > 0);
@@ -125,6 +134,7 @@ int make_slub(void *p, intptr_t size)
         slb->usemap_size += (slub_objs_shift[i].occupy + 7) / 8;
     }
     assert(slb->usemap_size > 0);
+    slb->self = p;
 
     // 初始化块归属位图
     // 第一个bitmap用于所有块使用情况
@@ -161,7 +171,19 @@ ERROR:
     return rslt;
 }
 
-void dump_mem(void *p, intptr_t size)
+void *slub_alloc(void *p, intptr_t obj_size)
+{
+    assert(NULL != p);
+    assert(obj_size > 0);
+
+    return NULL;
+}
+
+void slub_free(void *p, void *obj, intptr_t obj_size)
+{
+}
+
+void __dump_mem__(void *p, intptr_t size)
 {
     char *seg16;
     intptr_t segsize;
@@ -197,12 +219,13 @@ void dump_slub(void *p)
     (void)fprintf(stderr, "[DEBUG] slub->bitmap_size: %d\n", slb->bitmap_size);
     (void)fprintf(stderr, "[DEBUG] slub->usemap: %p\n", slb->usemap);
     (void)fprintf(stderr, "[DEBUG] slub->usemap_size: %d\n", slb->usemap_size);
+    (void)fprintf(stderr, "[DEBUG] slub->self: %p\n", slb->self);
 
     (void)fprintf(stderr, "[DEBUG] slub->bitmap context:\n");
     assert(obj_type_count > 0);
-    dump_mem(slb->bitmap, slb->bitmap_size * (obj_type_count + 1));
+    __dump_mem__(slb->bitmap, slb->bitmap_size * (obj_type_count + 1));
     (void)fprintf(stderr, "[DEBUG] slub->usemap context:\n");
-    dump_mem(slb->usemap, slb->usemap_size * slb->blocks);
+    __dump_mem__(slb->usemap, slb->usemap_size * slb->blocks);
 
     return;
 }
