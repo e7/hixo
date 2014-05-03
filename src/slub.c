@@ -57,6 +57,8 @@ static intptr_t obj_type_count = 0;
 
 
 typedef struct {
+    intptr_t magic_no; // 0xE78F8A
+
     intptr_t nblocks; // 内存块数目
 
     // 块归属位图，第一块记录全部块的使用情况，即是否被使用
@@ -122,10 +124,11 @@ intptr_t mem_is_filled(void const *p, intptr_t len)
     assert(len > 0);
 
     for (intptr_t i = 0; i < nints; ++i) {
+        tmpbyte = (char const *)&tmpint[i + 1];
+
         if ((~0) != tmpint[i]) {
             return FALSE;
         }
-        tmpbyte = (char const *)&tmpint[i + 1];
     }
 
     for (intptr_t i = 0; i < nbytes; ++i) {
@@ -135,6 +138,57 @@ intptr_t mem_is_filled(void const *p, intptr_t len)
     }
 
     return TRUE;
+}
+
+void mem_set_bit(void *p, intptr_t len, intptr_t n, intptr_t value)
+{
+    char *tmp = (char *)p;
+    intptr_t nbytes = n / 8;
+    intptr_t part_bits = n % 8;
+
+    assert(NULL != p);
+    assert(n > 0);
+    assert(n < len * 8);
+
+    if (value) {
+        p[nbytes] |= (1 << part_bits);
+    } else {
+        p[nblocks] &= ~(1 << part_bits);
+    }
+}
+
+// 内存位探测
+intptr_t mem_detect_bit(void const *p, intptr_t len, intptr_t zero)
+{
+    char const *tmpbyte = (char const *)p;
+
+    assert(NULL != p);
+    assert(len > 0);
+
+    for (intptr_t i = 0; i < len; ++i) { // 一定能进循环
+        if (zero) { // 0位探测
+            if ((~0) == tmpbyte[i]) {
+                continue;
+            }
+            for (intptr_t j = 0; j < 8; ++j) {
+                if (tmpbyte[i] & (1 << j)) {
+                    continue;
+                }
+                return i * 8 + j;
+            }
+        } else { // 1位探测
+            if (0 == tmpbyte[i]) {
+                continue;
+            }
+            for (intptr_t j = 0; j < 8; ++j) {
+                if (tmpbyte[i] & (1 << j)) {
+                    return i * 8 + j;
+                }
+            }
+        }
+    }
+
+    return -1;
 }
 
 intptr_t slub_format(void *p, intptr_t size)
@@ -162,6 +216,7 @@ intptr_t slub_format(void *p, intptr_t size)
     RESOLV_OCCUPY();
 
     slb = (slub_t *)p;
+    slb->magic_no = 0xE78F8A;
     slb->nblocks = nblocks;
     slb->bitmap = (char *)&slb[1];
     slb->bitmap_size = (slb->nblocks + 7) / 8;
@@ -211,11 +266,26 @@ ERROR:
 void *slub_alloc(void *p, intptr_t obj_size)
 {
     slub_t *slb = (slub_t *)p;
+    intptr_t type = 0;
+    char *typemap = NULL;
+    intptr_t block = 0;
 
     assert(NULL != p);
     assert(obj_size > 0);
 
+    assert(0xE78F8A == slb->magic_no);
 
+    for (intptr_t i = 0; 0 != slub_objs_shift[i].shift; ++i) {
+        if (obj_size <= (1 << slub_objs_shift[i].shift)) {
+            type = i;
+            break;
+        }
+    }
+    typemap = &slb->bitmap[slb->bitmap_size * (type + 1)];
+    block = mem_detect_bit(typemap, slb->bitmap_size, FALSE);
+    if (-1 == block) {
+
+    }
 
     return NULL;
 }
@@ -254,8 +324,14 @@ void dump_slub(void *p)
     assert(NULL != p);
 
     slb = (slub_t *)p;
+    for (intptr_t i = 0; 0 != slub_objs_shift[i].shift; ++i) {
+        (void)fprintf(stderr,
+                      "[DEBUG] slub_objs_shift[i]: (%d, %d)\n",
+                      slub_objs_shift[i].shift,
+                      slub_objs_shift[i].occupy);
+    }
     (void)fprintf(stderr, "[DEBUG] slub: %p\n", slb);
-    (void)fprintf(stderr, "[DEBUG] slub->blocks: %d\n", slb->nblocks);
+    (void)fprintf(stderr, "[DEBUG] slub->nblocks: %d\n", slb->nblocks);
     (void)fprintf(stderr, "[DEBUG] slub->bitmap: %p\n", slb->bitmap);
     (void)fprintf(stderr, "[DEBUG] slub->bitmap_size: %d\n", slb->bitmap_size);
     (void)fprintf(stderr, "[DEBUG] slub->usemap: %p\n", slb->usemap);

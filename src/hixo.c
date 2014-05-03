@@ -485,7 +485,7 @@ int main(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-#define MEMSIZE 4096 * 33
+#define MEMSIZE 4096 * 3
     void *p;
 
     p = malloc(MEMSIZE);
