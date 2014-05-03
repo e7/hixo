@@ -21,10 +21,10 @@
 
 
 // 内存块左移
-extern void mem_shift_left(uint8_t *p, intptr_t len, intptr_t n);
+extern void mem_shift_left(void *p, intptr_t len, intptr_t n);
 
 // 用户接口
-extern intptr_t make_slub(void *p, intptr_t size);
+extern intptr_t slub_format(void *p, intptr_t size);
 extern void *slub_alloc(void *p, intptr_t obj_size);
 extern void slub_free(void *p, void *obj, intptr_t obj_size);
 

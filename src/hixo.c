@@ -489,7 +489,7 @@ int main(int argc, char *argv[])
     void *p;
 
     p = malloc(MEMSIZE);
-    make_slub(p, MEMSIZE);
+    slub_format(p, MEMSIZE);
     dump_slub(p);
     free(p);
 
