@@ -151,9 +151,9 @@ void mem_set_bit(void *p, intptr_t len, intptr_t n, intptr_t value)
     assert(n < len * 8);
 
     if (value) {
-        p[nbytes] |= (1 << part_bits);
+        tmp[nbytes] |= (1 << part_bits);
     } else {
-        p[nblocks] &= ~(1 << part_bits);
+        tmp[nbytes] &= ~(1 << part_bits);
     }
 }
 
@@ -265,9 +265,11 @@ ERROR:
 
 void *slub_alloc(void *p, intptr_t obj_size)
 {
+    void *rslt = NULL;
     slub_t *slb = (slub_t *)p;
     intptr_t type = 0;
     char *typemap = NULL;
+    char *usemap = NULL;
     intptr_t block = 0;
 
     assert(NULL != p);
@@ -282,9 +284,38 @@ void *slub_alloc(void *p, intptr_t obj_size)
         }
     }
     typemap = &slb->bitmap[slb->bitmap_size * (type + 1)];
-    block = mem_detect_bit(typemap, slb->bitmap_size, FALSE);
-    if (-1 == block) {
 
+    // 先查询旗下归属块
+    for (intptr_t i = 0; i < slb->bitmap_size; ++i) {
+        if (0 == typemap[i]) {
+            continue;
+        }
+
+        for (intptr_t j = 0; j < 8; ++j) {
+            if (0 != (typemap[i] & (1 << j))) {
+                continue;
+            }
+
+            usemap = &slb->usemap[(i * 8 + j) * slb->usemap_size];
+            if (mem_is_filled(usemap, slb->usemap_size)) {
+                continue;
+            }
+            block = i * 8 + j;
+        }
+
+        break;
+    }
+
+    // 寻找空闲内存块
+    block = -1;
+    if (-1 == block) { // 重新申请
+        block = mem_detect_bit(slb->bitmap, slb->bitmap_size, TRUE);
+        if (-1 == block) {
+            fprintf(stderr, "[ERROR] out of slub memory\n");
+            return NULL;
+        }
+        mem_set_bit(slb->bitmap, slb->bitmap_size, block, 1);
+        mem_set_bit(typemap, slb->bitmap_size, block, 1);
     }
 
     return NULL;
