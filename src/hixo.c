@@ -487,9 +487,19 @@ int main(int argc, char *argv[])
 {
 #define MEMSIZE 4096 * 3
     void *p;
+    struct mydata_t {
+        int a;
+        int b;
+        int c;
+    } *dt;
 
     p = malloc(MEMSIZE);
     slub_format(p, MEMSIZE);
+    dt = slub_alloc(p, sizeof(struct mydata_t));
+    fprintf(stderr, "dt: %p\n", dt);
+    dt->a = 97;
+    dt->b = 98;
+    dt->c = 99;
     dump_slub(p);
     free(p);
 

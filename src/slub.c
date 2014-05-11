@@ -72,11 +72,14 @@ typedef struct {
     char *usemap;
     intptr_t usemap_size; // 单张位图大小
 
+    // 内存块
+    char *block;
+
     void *self;
 } slub_t;
 
 
-static void __dump_mem__(void *p, intptr_t size);
+static void dump_mem(void *p, intptr_t size);
 
 
 // 内存左移
@@ -147,7 +150,7 @@ void mem_set_bit(void *p, intptr_t len, intptr_t n, intptr_t value)
     intptr_t part_bits = n % 8;
 
     assert(NULL != p);
-    assert(n > 0);
+    assert(n >= 0);
     assert(n < len * 8);
 
     if (value) {
@@ -195,8 +198,8 @@ intptr_t slub_format(void *p, intptr_t size)
 {
     int rslt;
     slub_t *slb;
-    intptr_t part_bits;
     intptr_t nblocks;
+    intptr_t part_bits;
     char *bitmap, *usemap;
 
     assert(NULL != p);
@@ -227,16 +230,14 @@ intptr_t slub_format(void *p, intptr_t size)
         slb->usemap_size += (slub_objs_shift[i].occupy + 7) / 8;
     }
     assert(slb->usemap_size > 0);
+    slb->block = ((char *)p + BLOCK_SIZE);
     slb->self = p;
 
     // 初始化块归属位图
     bitmap = slb->bitmap;
-    (void)memset(bitmap, 0, slb->bitmap_size * (obj_type_count + 1));
     part_bits = slb->nblocks % 8;
-    for (int i = 0; i < obj_type_count + 1; ++i) {
-        bitmap += slb->bitmap_size;
-        bitmap[-1] = ((~0) << part_bits);
-    }
+    (void)memset(bitmap, 0, slb->bitmap_size * (obj_type_count + 1));
+    slb->bitmap[slb->bitmap_size - 1] = ((~0) << part_bits); // top bitmap
 
     // 初始化块使用位图
     usemap = slb->usemap;
@@ -263,69 +264,150 @@ ERROR:
     return rslt;
 }
 
+static intptr_t
+alloc_index_from_top_bitmap(slub_t *slb, intptr_t type)
+{
+    intptr_t rslt;
+    char *top_bitmap;
+    char *type_bitmap;
+
+    rslt = -1;
+    top_bitmap = slb->bitmap;
+    type_bitmap = &slb->bitmap[slb->bitmap_size * (type + 1)];
+    for (intptr_t i = 0; i < slb->bitmap_size; ++i) {
+        if ((~0) != top_bitmap[i]) {
+            for (intptr_t j = 0; j < 8; ++j) {
+                if (0 == (top_bitmap[i] & (1 << j))) {
+                    top_bitmap[i] |= (1 << j);
+                    rslt = (i * 8 + j);
+                    mem_set_bit(type_bitmap, slb->bitmap_size, rslt, 1);
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    return rslt;
+}
+
+static intptr_t
+alloc_index_from_usemap(intptr_t type, char *usemap, intptr_t usemap_size)
+{
+    intptr_t rslt;
+    intptr_t offset; // 在usemap中的起始位置偏移
+
+    // usemap中属于该类型的字节数
+    intptr_t content_size = (slub_objs_shift[type].occupy + 7) / 8;
+
+    rslt = -1;
+    offset = 0;
+    for (intptr_t i = 0; i < type; ++i) {
+        offset += (slub_objs_shift[i].occupy + 7) / 8;
+    }
+
+    for (intptr_t i = 0; i < content_size; ++i) {
+        if ((~0) != usemap[offset + i]) {
+            for (intptr_t j = 0; j < 8; ++j) {
+                if (0 == (usemap[offset + i] & (1 << j))) {
+                    rslt = i * 8 + j;
+                    usemap[offset + i] |= (1 << j); // 置位表示已使用
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    return rslt;
+}
+
+static void *slub_alloc_from_existed(slub_t *slb,
+                                     intptr_t type)
+{
+    void *rslt;
+    char *usemap;
+    char *type_bitmap;
+    intptr_t type_size;
+
+    rslt = NULL;
+    type_size = (1 << slub_objs_shift[type].shift);
+    type_bitmap = &slb->bitmap[slb->bitmap_size * (type + 1)];
+    for (intptr_t i = 0; i < slb->bitmap_size; ++i) {
+        if (0 != type_bitmap[i]) {
+            char *block_ptr;
+            intptr_t rslt_index;
+
+            for (intptr_t j = 0; j < 8; ++j) {
+                if (0 == (type_bitmap[i] & (1 << j))) {
+                    continue;
+                }
+
+                // (i * 8 + j)即为usemap索引
+                usemap = &slb->usemap[(i * 8 + j) * (slb->usemap_size)];
+                rslt_index = alloc_index_from_usemap(type,
+                                                     usemap,
+                                                     slb->usemap_size);
+                if (-1 != rslt_index) {
+                    block_ptr = &slb->block[(i * 8 + j) * BLOCK_SIZE];
+                    rslt = &block_ptr[rslt_index * type_size];
+                    break;
+                }
+            }
+
+            break;
+        }
+    }
+
+    return rslt;
+}
+
 void *slub_alloc(void *p, intptr_t obj_size)
 {
-    void *rslt = NULL;
+    void *rslt;
+    intptr_t type; // 对象类型索引
+    intptr_t block_index;
     slub_t *slb = (slub_t *)p;
-    intptr_t type = 0;
-    char *typemap = NULL;
-    char *usemap = NULL;
-    intptr_t block = 0;
 
     assert(NULL != p);
     assert(obj_size > 0);
 
     assert(0xE78F8A == slb->magic_no);
 
+    // 寻找合适的对象类型
+    type = -1;
     for (intptr_t i = 0; 0 != slub_objs_shift[i].shift; ++i) {
         if (obj_size <= (1 << slub_objs_shift[i].shift)) {
             type = i;
             break;
         }
     }
-    typemap = &slb->bitmap[slb->bitmap_size * (type + 1)];
+    assert(-1 != type);
 
     // 先查询旗下归属块
-    for (intptr_t i = 0; i < slb->bitmap_size; ++i) {
-        if (0 == typemap[i]) {
-            continue;
-        }
-
-        for (intptr_t j = 0; j < 8; ++j) {
-            if (0 != (typemap[i] & (1 << j))) {
-                continue;
-            }
-
-            usemap = &slb->usemap[(i * 8 + j) * slb->usemap_size];
-            if (mem_is_filled(usemap, slb->usemap_size)) {
-                continue;
-            }
-            block = i * 8 + j;
-        }
-
-        break;
+    rslt = slub_alloc_from_existed(slb, type);
+    if (NULL != rslt) {
+        goto EXIT;
     }
 
-    // 寻找空闲内存块
-    block = -1;
-    if (-1 == block) { // 重新申请
-        block = mem_detect_bit(slb->bitmap, slb->bitmap_size, TRUE);
-        if (-1 == block) {
-            fprintf(stderr, "[ERROR] out of slub memory\n");
-            return NULL;
-        }
-        mem_set_bit(slb->bitmap, slb->bitmap_size, block, 1);
-        mem_set_bit(typemap, slb->bitmap_size, block, 1);
+    // 需要新块
+    block_index = alloc_index_from_top_bitmap(slb, type);
+    if (-1 == block_index) {
+        rslt = NULL;
+        goto EXIT;
     }
+    rslt = slub_alloc_from_existed(slb, type);
+    assert(NULL != rslt);
 
-    return NULL;
+EXIT:
+    return rslt;
 }
 
 void slub_free(void *p, void *obj, intptr_t obj_size)
 {
 }
 
-void __dump_mem__(void *p, intptr_t size)
+void dump_mem(void *p, intptr_t size)
 {
     char *seg16;
     intptr_t segsize;
@@ -367,13 +449,19 @@ void dump_slub(void *p)
     (void)fprintf(stderr, "[DEBUG] slub->bitmap_size: %d\n", slb->bitmap_size);
     (void)fprintf(stderr, "[DEBUG] slub->usemap: %p\n", slb->usemap);
     (void)fprintf(stderr, "[DEBUG] slub->usemap_size: %d\n", slb->usemap_size);
+    (void)fprintf(stderr, "[DEBUG] slub->block: %p\n", slb->block);
     (void)fprintf(stderr, "[DEBUG] slub->self: %p\n", slb->self);
 
     (void)fprintf(stderr, "[DEBUG] slub->bitmap context:\n");
     assert(obj_type_count > 0);
-    __dump_mem__(slb->bitmap, slb->bitmap_size * (obj_type_count + 1));
+    dump_mem(slb->bitmap, slb->bitmap_size * (obj_type_count + 1));
     (void)fprintf(stderr, "[DEBUG] slub->usemap context:\n");
-    __dump_mem__(slb->usemap, slb->usemap_size * slb->nblocks);
+    dump_mem(slb->usemap, slb->usemap_size * slb->nblocks);
+
+    for (intptr_t i = 0; i < slb->nblocks; ++i) {
+        (void)fprintf(stderr, "[DEBUG] slub->block[%d] context:\n", i);
+        dump_mem(&slb->block[i * BLOCK_SIZE], BLOCK_SIZE);
+    }
 
     return;
 }
